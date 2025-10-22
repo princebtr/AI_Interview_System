@@ -8,22 +8,19 @@ from datetime import datetime
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
+from config import Config
 
 app = Flask(__name__)
 CORS(app)
 
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient(Config.MONGODB_URI)
 db = client["interview_db"]
 users_collection = db["user_details"]
 os.makedirs("screenshots", exist_ok=True)
 
 model = YOLO('yolov8n.pt')
 
-<<<<<<< HEAD
-api_key = os.getenv("API_KEY")
-=======
-API_KEY = ''
->>>>>>> eeafe3c9340d4f2392866f2ca3c0a5249bab34f8
+api_key = Config.API_KEY
 
 GEN_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
@@ -129,4 +126,6 @@ def modify_details():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Run Flask on port 5001 to avoid conflict with Express (port 5000)
+    print(f"🚀 Flask AI Server starting on port {Config.FLASK_PORT}")
+    app.run(debug=Config.DEBUG, port=Config.FLASK_PORT, host='0.0.0.0')

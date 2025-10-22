@@ -1,14 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useForm } from "react-hook-form";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import {
+  EyeIcon,
+  EyeSlashIcon,
+  UserIcon,
+  ChevronDownIcon,
+  CogIcon,
+  ArrowRightOnRectangleIcon,
+  AcademicCapIcon,
+  DocumentTextIcon,
+  ChatBubbleLeftRightIcon,
+  CheckCircleIcon,
+} from "@heroicons/react/24/outline";
 
 const Dashboard = () => {
   const { user, logout, updateUser, updatePassword } = useAuth();
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const dropdownRef = useRef(null);
 
   const {
     register: registerProfile,
@@ -33,7 +47,7 @@ const Dashboard = () => {
   const onProfileSubmit = async (data) => {
     const result = await updateUser(data);
     if (result.success) {
-      setActiveTab("profile");
+      setShowProfileModal(false);
     }
   };
 
@@ -41,13 +55,62 @@ const Dashboard = () => {
     const { confirmNewPassword, ...passwordData } = data;
     const result = await updatePassword(passwordData);
     if (result.success) {
-      setActiveTab("profile");
+      setShowProfileModal(false);
     }
   };
 
   const handleLogout = () => {
     logout();
   };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const testTypes = [
+    {
+      id: "interview",
+      title: "Interview Test",
+      description: "AI-powered interview with real-time questions and analysis",
+      icon: ChatBubbleLeftRightIcon,
+      color: "bg-blue-500",
+      href: "/interview",
+    },
+    {
+      id: "multiple-choice",
+      title: "Multiple Choice Test",
+      description: "Quick assessment with multiple choice questions",
+      icon: CheckCircleIcon,
+      color: "bg-green-500",
+      href: "/test/multiple-choice",
+    },
+    {
+      id: "long-answer",
+      title: "Long Answer Test",
+      description: "Comprehensive written response evaluation",
+      icon: DocumentTextIcon,
+      color: "bg-purple-500",
+      href: "/test/long-answer",
+    },
+    {
+      id: "academic",
+      title: "Academic Assessment",
+      description: "Structured academic evaluation and testing",
+      icon: AcademicCapIcon,
+      color: "bg-orange-500",
+      href: "/test/academic",
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -59,52 +122,150 @@ const Dashboard = () => {
               <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
               <p className="text-gray-600">Welcome back, {user?.name}!</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-            >
-              Logout
-            </button>
+
+            {/* Profile Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                className="flex items-center space-x-2 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center">
+                  <UserIcon className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-gray-700 font-medium">{user?.name}</span>
+                <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showProfileDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(true);
+                      setShowProfileDropdown(false);
+                    }}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    <CogIcon className="h-4 w-4 mr-3" />
+                    Profile Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setShowProfileDropdown(false);
+                    }}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    <ArrowRightOnRectangleIcon className="h-4 w-4 mr-3" />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow rounded-lg">
-            {/* Tabs */}
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                <button
-                  onClick={() => setActiveTab("profile")}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === "profile"
-                      ? "border-indigo-500 text-indigo-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  Profile
-                </button>
-                <button
-                  onClick={() => setActiveTab("security")}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === "security"
-                      ? "border-indigo-500 text-indigo-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  Security
-                </button>
-              </nav>
-            </div>
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Choose Your Test Type
+            </h2>
+            <p className="text-gray-600">
+              Select the type of assessment you'd like to take
+            </p>
+          </div>
 
-            <div className="p-6">
+          {/* Test Type Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {testTypes.map((test) => {
+              const IconComponent = test.icon;
+              return (
+                <div
+                  key={test.id}
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer group"
+                  onClick={() => (window.location.href = test.href)}
+                >
+                  <div className="p-6">
+                    <div
+                      className={`${test.color} w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-200`}
+                    >
+                      <IconComponent className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {test.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm">{test.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Profile Settings
+                </h3>
+                <button
+                  onClick={() => setShowProfileModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="border-b border-gray-200 mb-4">
+                <nav className="-mb-px flex space-x-8">
+                  <button
+                    onClick={() => setActiveTab("profile")}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === "profile"
+                        ? "border-indigo-500 text-indigo-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    Profile
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("security")}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === "security"
+                        ? "border-indigo-500 text-indigo-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    Security
+                  </button>
+                </nav>
+              </div>
+
               {/* Profile Tab */}
               {activeTab === "profile" && (
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">
-                    Profile Information
-                  </h3>
                   <form onSubmit={handleProfileSubmit} className="space-y-4">
                     <div>
                       <label
@@ -160,7 +321,14 @@ const Dashboard = () => {
                       )}
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowProfileModal(false)}
+                        className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
                       <button
                         type="submit"
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -175,9 +343,6 @@ const Dashboard = () => {
               {/* Security Tab */}
               {activeTab === "security" && (
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">
-                    Change Password
-                  </h3>
                   <form onSubmit={handlePasswordSubmit} className="space-y-4">
                     <div>
                       <label
@@ -296,7 +461,14 @@ const Dashboard = () => {
                       )}
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowProfileModal(false)}
+                        className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
                       <button
                         type="submit"
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -310,7 +482,7 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

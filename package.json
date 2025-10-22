@@ -1,0 +1,25 @@
+{
+  "name": "interview-system",
+  "version": "1.0.0",
+  "description": "Interview System with Express and Flask backends",
+  "scripts": {
+    "start:express": "cd express && npm run dev",
+    "start:flask": "cd server && python app.py",
+    "start:client": "cd client && npm run dev",
+    "start:all": "concurrently \"npm run start:express\" \"npm run start:flask\"",
+    "install:all": "cd express && npm install && cd ../client && npm install",
+    "setup": "npm run install:all && cd ../server && pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "interview",
+    "ai",
+    "express",
+    "flask",
+    "react"
+  ],
+  "author": "",
+  "license": "ISC"
+}

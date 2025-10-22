@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { getApiUrl } from "../config/api.js";
 
 const QuestionGenerator = () => {
   const [subject, setSubject] = useState("");
@@ -11,40 +12,29 @@ const QuestionGenerator = () => {
 
   const fetchQuestion = async () => {
     setLoading(true);
-    const response = await fetch(
-      "http://localhost:5000/api/generate-question",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject }),
-      }
-    );
+    const response = await fetch(getApiUrl("/generate-question", true), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject }),
+    });
 
     const data = await response.json();
     console.log(data);
-    if (data.success) {
-      setCurrentQuestion(data.question);
-    } else {
-      alert("Failed to generate question: " + data.message);
-    }
+    setCurrentQuestion(data.question);
     setLoading(false);
   };
 
   const evaluateAnswer = async (answer) => {
-    const response = await fetch("http://localhost:5000/api/evaluate-answer", {
+    const response = await fetch(getApiUrl("/evaluate-answer", true), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: currentQuestion, answer }),
     });
 
     const data = await response.json();
-    if (data.success) {
-      const evaluation = data.evaluation;
-      setScore(evaluation);
-      fetchQuestion();
-    } else {
-      alert("Failed to evaluate answer: " + data.message);
-    }
+    const evaluation = data.evaluation;
+    setScore(evaluation);
+    fetchQuestion();
   };
 
   const startRecording = () => {
