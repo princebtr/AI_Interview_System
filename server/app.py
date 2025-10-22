@@ -19,7 +19,11 @@ os.makedirs("screenshots", exist_ok=True)
 
 model = YOLO('yolov8n.pt')
 
+<<<<<<< HEAD
 api_key = os.getenv("API_KEY")
+=======
+API_KEY = ''
+>>>>>>> eeafe3c9340d4f2392866f2ca3c0a5249bab34f8
 
 GEN_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
