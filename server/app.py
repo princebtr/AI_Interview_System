@@ -6,6 +6,7 @@ import cv2
 from ultralytics import YOLO
 from datetime import datetime
 from pymongo import MongoClient
+from dotenv import load_dotenv
 import os
 
 app = Flask(__name__)
@@ -18,8 +19,9 @@ os.makedirs("screenshots", exist_ok=True)
 
 model = YOLO('yolov8n.pt')
 
+api_key = os.getenv("API_KEY")
 
-GEN_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}"
+GEN_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
 @app.route('/hello', methods=['GET'])
 def hello():
