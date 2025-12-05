@@ -9,9 +9,6 @@ const Camera = () => {
   const [recording, setRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [showWarning, setShowWarning] = useState(false);
-  const [name, setName] = useState("");
-  const [age, setAge] = useState("");
-  const [gender, setGender] = useState("");
 
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
@@ -93,9 +90,6 @@ const Camera = () => {
     const blob = await fetch(screenshot).then((res) => res.blob());
 
     const formData = new FormData();
-    formData.append("name", name);
-    formData.append("age", age);
-    formData.append("gender", gender);
     formData.append("screenshot", blob, "frame.jpg");
 
     try {
@@ -124,63 +118,52 @@ const Camera = () => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 font-sans">
-      {showWarning && (
-        <div className="text-2xl text-red-500">⚠️ Multiple faces detected!</div>
-      )}
-      <h4 className="text-2xl font-bold mb-6 text-gray-800">
-        Mock Interview Recorder
-      </h4>
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <Webcam
-          audio={true}
-          ref={webcamRef}
-          mirrored={true}
-          screenshotFormat="image/jpeg"
-          className="rounded-lg border border-gray-300"
-          videoConstraints={{ facingMode: "user" }}
-        />
-        <form
-          onSubmit={handleStartInterview}
-          className="flex flex-col space-y-4 mt-4"
-        >
-          <input
-            type="text"
-            name="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter your name"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+    <div className="fixed top-17 right-4 z-50">
+      {/* Minimal Camera Card */}
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden w-80">
+        {/* Camera Container */}
+        <div className="relative">
+          <Webcam
+            audio={true}
+            ref={webcamRef}
+            mirrored={true}
+            screenshotFormat="image/jpeg"
+            className="w-full h-auto"
+            videoConstraints={{ facingMode: "user" }}
           />
-          <input
-            type="text"
-            name="age"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
-            placeholder="Enter your age"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-          />
-          <input
-            type="text"
-            name="gender"
-            value={gender}
-            onChange={(e) => setGender(e.target.value)}
-            placeholder="Enter your gender"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-          />
+
+          {/* Recording Overlay */}
+          {recording && (
+            <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center animate-pulse">
+              <div className="w-1.5 h-1.5 bg-white rounded-full mr-1 animate-pulse"></div>
+              REC
+            </div>
+          )}
+        </div>
+
+        {/* Multiple Faces Warning - Below Camera */}
+        {showWarning && (
+          <div className="p-3 bg-red-50 border-t border-red-200">
+            <div className="flex items-center space-x-2">
+              <div className="text-lg">⚠️</div>
+              <div>
+                <div className="text-red-800 font-semibold text-sm">
+                  Multiple faces detected!
+                </div>
+                <div className="text-red-600 text-xs">
+                  Please ensure only one person is visible
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hidden Form for Interview Controls */}
+        <form onSubmit={handleStartInterview} className="hidden">
           {!recording ? (
-            <button
-              type="submit"
-              className="px-6 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 transition duration-300"
-            >
-              Start Interview
-            </button>
+            <button type="submit">Start Interview</button>
           ) : (
-            <button
-              type="button"
-              onClick={stopRecording}
-              className="px-6 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition duration-300"
-            >
+            <button type="button" onClick={stopRecording}>
               Stop Interview
             </button>
           )}

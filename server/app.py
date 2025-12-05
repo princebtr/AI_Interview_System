@@ -97,30 +97,25 @@ def detect_phone():
 @app.route("/modify_details", methods=["POST"])
 def modify_details():
     try:
-        print("Received request to modify user details")
-        name = request.form.get("name")
-        age = request.form.get("age")
-        gender = request.form.get("gender")
+        print("Received request to start interview session")
 
         # Save screenshot if it exists
         screenshot = request.files.get("screenshot")
         screenshot_filename = None
         if screenshot:
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            screenshot_filename = f"screenshots/{name}_{timestamp}.jpg"
+            screenshot_filename = f"screenshots/interview_{timestamp}.jpg"
             screenshot.save(screenshot_filename)
 
-        # Save user info to MongoDB
-        user_data = {
-            "name": name,
-            "age": age,
-            "gender": gender,
+        # Save interview session info to MongoDB
+        session_data = {
             "timestamp": datetime.now(),
-            "screenshot_path": screenshot_filename
+            "screenshot_path": screenshot_filename,
+            "status": "started"
         }
 
-        users_collection.insert_one(user_data)
-        return jsonify({"message": "User data saved successfully!"}), 200
+        users_collection.insert_one(session_data)
+        return jsonify({"message": "Interview session started successfully!"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

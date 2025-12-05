@@ -92,9 +92,9 @@ const QuestionGenerator = () => {
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen flex flex-col items-center font-sans">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">
+      {/* <h1 className="text-3xl font-bold mb-6 text-gray-800">
         AI Question Generator
-      </h1>
+      </h1> */}
 
       <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-md">
         <label className="block text-gray-700 font-semibold mb-2">
