@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Camera from "../component/Camera";
 import QuestionGenerator from "../component/QuestionGenerator";
+import QuickAssessment from "./QuickAssessment";
 import { useAuth } from "../context/AuthContext";
 
 const InterviewSystem = () => {
   const { user, logout } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState("interview");
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -13,6 +17,26 @@ const InterviewSystem = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Check for tab query parameter on mount and when it changes
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "assessment") {
+      setActiveTab("assessment");
+    } else {
+      setActiveTab("interview");
+    }
+  }, [searchParams]);
+
+  // Handle tab change and update URL
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === "assessment") {
+      setSearchParams({ tab: "assessment" });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -115,15 +139,21 @@ const InterviewSystem = () => {
           </p>
         </div>
 
-        {/* Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Interview Session Card */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-800 flex items-center">
+        {/* Tabs Navigation */}
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => handleTabChange("interview")}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === "interview"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                <div className="flex items-center space-x-2">
                   <svg
-                    className="w-6 h-6 mr-2 text-blue-500"
+                    className="w-5 h-5"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -133,205 +163,270 @@ const InterviewSystem = () => {
                       clipRule="evenodd"
                     />
                   </svg>
-                  Interview Session
-                </h3>
+                  <span>Interview Session</span>
+                </div>
+              </button>
+              <button
+                onClick={() => handleTabChange("assessment")}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === "assessment"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-green-600 font-medium">
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path
+                      fillRule="evenodd"
+                      d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>Quick Assessment</span>
+                </div>
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "interview" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            {/* Interview Session Card */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg
+                      className="w-6 h-6 mr-2 text-blue-500"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Interview Session
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-sm text-green-600 font-medium">
+                      Ready
+                    </span>
+                  </div>
+                </div>
+                <QuestionGenerator />
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  Session Stats
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Sessions:</span>
+                    <span className="font-semibold text-blue-600">12</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Avg. Score:</span>
+                    <span className="font-semibold text-green-600">8.5/10</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Last Session:</span>
+                    <span className="font-semibold text-gray-800">
+                      2 days ago
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  AI Features
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700">
+                      Face Detection
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700">
+                      Voice Analysis
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700">
+                      Question Generation
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700">
+                      Performance Scoring
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "assessment" && (
+          <div className="mb-8">
+            <QuickAssessment />
+          </div>
+        )}
+
+        {/* Additional Cards Row */}
+        {activeTab === "interview" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Recent Sessions */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <svg
+                  className="w-5 h-5 mr-2 text-purple-500"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Recent Sessions
+              </h3>
+              <div className="space-y-2">
+                <div className="text-sm text-gray-600">Technical Interview</div>
+                <div className="text-xs text-gray-500">
+                  2 days ago • Score: 8.5
+                </div>
+                <div className="text-sm text-gray-600">
+                  Behavioral Interview
+                </div>
+                <div className="text-xs text-gray-500">
+                  1 week ago • Score: 7.2
+                </div>
+              </div>
+            </div>
+
+            {/* Performance Metrics */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <svg
+                  className="w-5 h-5 mr-2 text-green-500"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Performance
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm">
+                    <span>Communication</span>
+                    <span>85%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                    <div
+                      className="bg-green-500 h-2 rounded-full"
+                      style={{ width: "85%" }}
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-sm">
+                    <span>Technical</span>
+                    <span>78%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full"
+                      style={{ width: "78%" }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tips & Guidelines */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <svg
+                  className="w-5 h-5 mr-2 text-yellow-500"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Quick Tips
+              </h3>
+              <ul className="text-sm text-gray-700 space-y-1">
+                <li>• Maintain eye contact</li>
+                <li>• Speak clearly</li>
+                <li>• Stay focused</li>
+                <li>• Be confident</li>
+              </ul>
+            </div>
+
+            {/* System Status */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <svg
+                  className="w-5 h-5 mr-2 text-blue-500"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                System Status
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">AI Engine</span>
+                  <span className="text-green-600 text-sm font-medium">
+                    Online
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Camera</span>
+                  <span className="text-green-600 text-sm font-medium">
                     Ready
                   </span>
                 </div>
-              </div>
-              <QuestionGenerator />
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                Session Stats
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total Sessions:</span>
-                  <span className="font-semibold text-blue-600">12</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Avg. Score:</span>
-                  <span className="font-semibold text-green-600">8.5/10</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Last Session:</span>
-                  <span className="font-semibold text-gray-800">
-                    2 days ago
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                AI Features
-              </h3>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700">Face Detection</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700">Voice Analysis</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700">
-                    Question Generation
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700">
-                    Performance Scoring
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Microphone</span>
+                  <span className="text-green-600 text-sm font-medium">
+                    Active
                   </span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Additional Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Recent Sessions */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <svg
-                className="w-5 h-5 mr-2 text-purple-500"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Recent Sessions
-            </h3>
-            <div className="space-y-2">
-              <div className="text-sm text-gray-600">Technical Interview</div>
-              <div className="text-xs text-gray-500">
-                2 days ago • Score: 8.5
-              </div>
-              <div className="text-sm text-gray-600">Behavioral Interview</div>
-              <div className="text-xs text-gray-500">
-                1 week ago • Score: 7.2
-              </div>
-            </div>
-          </div>
-
-          {/* Performance Metrics */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <svg
-                className="w-5 h-5 mr-2 text-green-500"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Performance
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-sm">
-                  <span>Communication</span>
-                  <span>85%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div
-                    className="bg-green-500 h-2 rounded-full"
-                    style={{ width: "85%" }}
-                  ></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm">
-                  <span>Technical</span>
-                  <span>78%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full"
-                    style={{ width: "78%" }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tips & Guidelines */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <svg
-                className="w-5 h-5 mr-2 text-yellow-500"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Quick Tips
-            </h3>
-            <ul className="text-sm text-gray-700 space-y-1">
-              <li>• Maintain eye contact</li>
-              <li>• Speak clearly</li>
-              <li>• Stay focused</li>
-              <li>• Be confident</li>
-            </ul>
-          </div>
-
-          {/* System Status */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <svg
-                className="w-5 h-5 mr-2 text-blue-500"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              System Status
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">AI Engine</span>
-                <span className="text-green-600 text-sm font-medium">
-                  Online
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Camera</span>
-                <span className="text-green-600 text-sm font-medium">
-                  Ready
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Microphone</span>
-                <span className="text-green-600 text-sm font-medium">
-                  Active
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </main>
 
       {/* Camera Component - Fixed Position */}

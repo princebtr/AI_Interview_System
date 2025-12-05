@@ -9,12 +9,10 @@ const Camera = () => {
   const [recording, setRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [showWarning, setShowWarning] = useState(false);
-
-  document.addEventListener("visibilitychange", function () {
-    if (document.hidden) {
-      alert("Tab switching detected! This may be considered cheating.");
-    }
-  });
+  const [warningMessage, setWarningMessage] = useState("");
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const lastPhoneAlertTime = useRef(0);
+  const lastTabSwitchAlertTime = useRef(0);
 
   const startRecording = () => {
     if (webcamRef.current && webcamRef.current.stream) {
@@ -41,41 +39,83 @@ const Camera = () => {
   };
 
   const detectFaces = async () => {
-    const imageSrc = webcamRef.current.getScreenshot();
-    const blob = await fetch(imageSrc).then((res) => res.blob());
-    const formData = new FormData();
-    formData.append("image", blob, "frame.jpg");
+    if (!webcamRef.current) {
+      return;
+    }
 
     try {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        return;
+      }
+
+      const blob = await fetch(imageSrc).then((res) => res.blob());
+      const formData = new FormData();
+      formData.append("image", blob, "frame.jpg");
+
       const response = await axios.post(
         getApiUrl("/detect_faces", true),
         formData
       );
-      if (response.data.count > 1) {
+      
+      const faceCount = response.data.count || 0;
+      console.log("Faces detected:", faceCount);
+      
+      if (faceCount > 1) {
+        setWarningMessage(`Multiple faces detected (${faceCount})! Please ensure only one person is visible.`);
         setShowWarning(true);
-        setTimeout(() => setShowWarning(false), 3000);
+        // Keep warning visible for 5 seconds
+        setTimeout(() => {
+          setShowWarning(false);
+          setWarningMessage("");
+        }, 5000);
+      } else if (faceCount === 0) {
+        // No face detected - could be an issue
+        setWarningMessage("No face detected! Please ensure you are visible in the camera.");
+        setShowWarning(true);
+        setTimeout(() => {
+          setShowWarning(false);
+          setWarningMessage("");
+        }, 3000);
       }
-      console.log("Faces detected:", response.data.count);
     } catch (error) {
       console.error("Face detection error:", error);
     }
   };
 
   const detectPhones = async () => {
-    const imageSrc = webcamRef.current.getScreenshot();
-    const blob = await fetch(imageSrc).then((res) => res.blob());
-    const formData = new FormData();
-    formData.append("image", blob, "frame.jpg");
+    if (!webcamRef.current) {
+      return;
+    }
 
     try {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        return;
+      }
+
+      const blob = await fetch(imageSrc).then((res) => res.blob());
+      const formData = new FormData();
+      formData.append("image", blob, "frame.jpg");
+
       const response = await axios.post(
         getApiUrl("/detect_phone", true),
         formData
       );
+      
       if (response.data.phone_detected) {
-        alert("Phone detected! Please put it away.");
+        const now = Date.now();
+        // Show alert only if 5 seconds have passed since last alert
+        if (now - lastPhoneAlertTime.current > 5000) {
+          alert("⚠️ WARNING: Phone Detected!\n\nA phone has been detected in your camera view. Please put it away immediately. This violation may be reported.");
+          lastPhoneAlertTime.current = now;
+        }
+        setWarningMessage("Phone detected! Please put it away.");
         setShowWarning(true);
-        setTimeout(() => setShowWarning(false), 3000);
+        setTimeout(() => {
+          setShowWarning(false);
+          setWarningMessage("");
+        }, 5000);
       }
       console.log("Phone detected:", response.data.phone_detected);
     } catch (error) {
@@ -100,10 +140,49 @@ const Camera = () => {
     }
   };
 
+  // Tab switch detection
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        const now = Date.now();
+        setTabSwitchCount((prev) => {
+          const newCount = prev + 1;
+          
+          // Show alert only if 3 seconds have passed since last alert
+          if (now - lastTabSwitchAlertTime.current > 3000) {
+            alert(`⚠️ WARNING: Tab Switch Detected!\n\nYou have switched tabs ${newCount} time(s). Tab switching during an interview/assessment may be considered cheating and could result in disqualification.\n\nPlease stay on this page.`);
+            lastTabSwitchAlertTime.current = now;
+          }
+          
+          setWarningMessage(`Tab switching detected! (${newCount} time(s)). This may be considered cheating.`);
+          setShowWarning(true);
+          setTimeout(() => {
+            setShowWarning(false);
+            setWarningMessage("");
+          }, 5000);
+          return newCount;
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  // Face and phone detection
+  useEffect(() => {
+    if (!webcamRef.current) {
+      return;
+    }
+
     const interval = setInterval(() => {
-      detectFaces();
-      detectPhones();
+      if (webcamRef.current) {
+        detectFaces();
+        detectPhones();
+      }
     }, 2000);
 
     return () => {
@@ -141,17 +220,14 @@ const Camera = () => {
           )}
         </div>
 
-        {/* Multiple Faces Warning - Below Camera */}
+        {/* Warning Messages - Below Camera */}
         {showWarning && (
-          <div className="p-3 bg-red-50 border-t border-red-200">
+          <div className="p-3 bg-red-50 border-t border-red-200 animate-pulse">
             <div className="flex items-center space-x-2">
               <div className="text-lg">⚠️</div>
-              <div>
+              <div className="flex-1">
                 <div className="text-red-800 font-semibold text-sm">
-                  Multiple faces detected!
-                </div>
-                <div className="text-red-600 text-xs">
-                  Please ensure only one person is visible
+                  {warningMessage || "Warning detected!"}
                 </div>
               </div>
             </div>

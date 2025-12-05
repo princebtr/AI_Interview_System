@@ -72,6 +72,133 @@ def evaluate_answer():
     evaluation = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', 'invalid').lower()
     return jsonify({'evaluation': evaluation})
 
+@app.route('/generate-mcq-questions', methods=['POST'])
+def generate_mcq_questions():
+    try:
+        data = request.get_json()
+        subject = data.get('subject', '')
+        num_questions = data.get('numQuestions', 5)
+        
+        if not subject or not num_questions:
+            return jsonify({'error': 'Subject and number of questions are required'}), 400
+        
+        prompt = (
+            f"Generate {num_questions} multiple choice questions (MCQ) for the subject: {subject}\n\n"
+            f"Format each question as follows:\n"
+            f"Q1. [Question text]\n"
+            f"A) [Option A]\n"
+            f"B) [Option B]\n"
+            f"C) [Option C]\n"
+            f"D) [Option D]\n"
+            f"Correct Answer: [A/B/C/D]\n\n"
+            f"Repeat this format for all {num_questions} questions. "
+            f"Make sure each question has exactly 4 options (A, B, C, D) and clearly indicate the correct answer."
+        )
+        
+        res = requests.post(GEN_URL, json={
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }, headers={"Content-Type": "application/json"})
+        
+        result = res.json()
+        questions_text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+        
+        # Parse the questions into structured format
+        questions = parse_mcq_questions(questions_text, num_questions)
+        
+        return jsonify({'questions': questions})
+    except Exception as e:
+        print(f"Error generating MCQ questions: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def parse_mcq_questions(text, num_questions):
+    """Parse MCQ questions from Gemini response text"""
+    import re
+    questions = []
+    
+    # Split by question markers
+    question_blocks = re.split(r'Q\d+\.', text)
+    question_blocks = [block.strip() for block in question_blocks if block.strip()]
+    
+    for i, block in enumerate(question_blocks[:num_questions]):
+        try:
+            # Extract question text (before options)
+            question_match = re.search(r'^(.+?)(?=A\)|$)', block, re.DOTALL)
+            question_text = question_match.group(1).strip() if question_match else f"Question {i+1}"
+            
+            # Extract options
+            options = {}
+            for option in ['A', 'B', 'C', 'D']:
+                option_match = re.search(rf'{option}\)\s*(.+?)(?=[A-D]\)|Correct Answer:|$)', block, re.DOTALL)
+                if option_match:
+                    options[option] = option_match.group(1).strip()
+            
+            # Extract correct answer
+            correct_match = re.search(r'Correct Answer:\s*([A-D])', block, re.IGNORECASE)
+            correct_answer = correct_match.group(1).upper() if correct_match else 'A'
+            
+            questions.append({
+                'id': i + 1,
+                'question': question_text,
+                'options': options,
+                'correctAnswer': correct_answer
+            })
+        except Exception as e:
+            print(f"Error parsing question {i+1}: {str(e)}")
+            # Fallback: create a simple question structure
+            questions.append({
+                'id': i + 1,
+                'question': f"Question {i+1}",
+                'options': {'A': 'Option A', 'B': 'Option B', 'C': 'Option C', 'D': 'Option D'},
+                'correctAnswer': 'A'
+            })
+    
+    return questions
+
+@app.route('/evaluate-mcq-answers', methods=['POST'])
+def evaluate_mcq_answers():
+    try:
+        data = request.get_json()
+        questions = data.get('questions', [])
+        user_answers = data.get('userAnswers', {})
+        
+        if not questions or not user_answers:
+            return jsonify({'error': 'Questions and user answers are required'}), 400
+        
+        results = []
+        correct_count = 0
+        
+        for question in questions:
+            question_id = str(question.get('id', ''))
+            correct_answer = question.get('correctAnswer', '')
+            user_answer = user_answers.get(question_id, '')
+            
+            is_correct = user_answer.upper() == correct_answer.upper()
+            if is_correct:
+                correct_count += 1
+            
+            results.append({
+                'questionId': question_id,
+                'question': question.get('question', ''),
+                'correctAnswer': correct_answer,
+                'userAnswer': user_answer,
+                'isCorrect': is_correct
+            })
+        
+        total_questions = len(questions)
+        score_percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
+        
+        return jsonify({
+            'results': results,
+            'score': correct_count,
+            'totalQuestions': total_questions,
+            'percentage': round(score_percentage, 2)
+        })
+    except Exception as e:
+        print(f"Error evaluating MCQ answers: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/detect_faces', methods=['POST'])
 def detect_faces():
     file = request.files['image']

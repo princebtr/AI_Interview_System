@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useForm } from "react-hook-form";
 import {
@@ -26,6 +27,7 @@ import {
 
 const Dashboard = () => {
   const { user, logout, updateUser, updatePassword } = useAuth();
+  const navigate = useNavigate();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
@@ -160,7 +162,7 @@ const Dashboard = () => {
       icon: CheckCircleIcon,
       color: "bg-green-500",
       hoverColor: "hover:bg-green-600",
-      href: "/test/multiple-choice",
+      href: "/interview?tab=assessment",
       features: ["Instant results", "Detailed explanations", "Topic analysis"],
     },
     {
@@ -364,7 +366,7 @@ const Dashboard = () => {
                         <div
                           key={test.id}
                           className="border border-gray-200 rounded-lg hover:shadow-lg transition-all duration-200 cursor-pointer group hover:border-indigo-300"
-                          onClick={() => (window.location.href = test.href)}
+                          onClick={() => navigate(test.href)}
                         >
                           <div className="p-6">
                             <div className="flex items-start justify-between mb-4">
