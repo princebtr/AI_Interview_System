@@ -76,15 +76,21 @@ def evaluate_answer():
 def generate_mcq_questions():
     try:
         data = request.get_json()
-        subject = data.get('subject', '')
+        if not data:
+            return jsonify({'error': 'Invalid request data'}), 400
+            
+        subject = data.get('subject', '').strip()
         num_questions = data.get('numQuestions', 5)
         
-        if not subject or not num_questions:
-            return jsonify({'error': 'Subject and number of questions are required'}), 400
+        if not subject:
+            return jsonify({'error': 'Subject is required'}), 400
+        
+        if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
+            return jsonify({'error': 'Number of questions must be between 1 and 20'}), 400
         
         prompt = (
             f"Generate {num_questions} multiple choice questions (MCQ) for the subject: {subject}\n\n"
-            f"Format each question as follows:\n"
+            f"Format each question EXACTLY as follows:\n"
             f"Q1. [Question text]\n"
             f"A) [Option A]\n"
             f"B) [Option B]\n"
@@ -92,51 +98,152 @@ def generate_mcq_questions():
             f"D) [Option D]\n"
             f"Correct Answer: [A/B/C/D]\n\n"
             f"Repeat this format for all {num_questions} questions. "
-            f"Make sure each question has exactly 4 options (A, B, C, D) and clearly indicate the correct answer."
+            f"Make sure each question has exactly 4 options (A, B, C, D) and clearly indicate the correct answer. "
+            f"Only output the questions in the specified format, no additional text."
         )
+        
+        print(f"Generating {num_questions} MCQ questions for subject: {subject}")
         
         res = requests.post(GEN_URL, json={
             "contents": [{
                 "parts": [{"text": prompt}]
             }]
-        }, headers={"Content-Type": "application/json"})
+        }, headers={"Content-Type": "application/json"}, timeout=30)
+        
+        if res.status_code != 200:
+            error_msg = f"Gemini API error: {res.status_code}"
+            try:
+                error_data = res.json()
+                error_msg = error_data.get('error', {}).get('message', error_msg)
+            except:
+                pass
+            print(f"Gemini API error: {error_msg}")
+            return jsonify({'error': f'Failed to generate questions: {error_msg}'}), 500
         
         result = res.json()
-        questions_text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+        
+        # Check if response has candidates
+        if 'candidates' not in result or not result['candidates']:
+            print(f"Invalid Gemini response structure: {result}")
+            return jsonify({'error': 'Invalid response from AI service'}), 500
+        
+        # Extract text from response
+        candidate = result['candidates'][0]
+        if 'content' not in candidate or 'parts' not in candidate['content']:
+            print(f"Invalid candidate structure: {candidate}")
+            return jsonify({'error': 'Invalid response format from AI service'}), 500
+        
+        questions_text = candidate['content']['parts'][0].get('text', '')
+        
+        if not questions_text:
+            print(f"Empty response from Gemini")
+            return jsonify({'error': 'No questions generated. Please try again with a different subject.'}), 500
+        
+        print(f"Received questions text (first 200 chars): {questions_text[:200]}")
         
         # Parse the questions into structured format
         questions = parse_mcq_questions(questions_text, num_questions)
         
+        if not questions or len(questions) == 0:
+            print(f"Failed to parse questions from text")
+            return jsonify({'error': 'Failed to parse generated questions. Please try again.'}), 500
+        
+        print(f"Successfully parsed {len(questions)} questions")
         return jsonify({'questions': questions})
+        
+    except requests.exceptions.Timeout:
+        print("Request timeout")
+        return jsonify({'error': 'Request timeout. Please try again.'}), 500
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {str(e)}")
+        return jsonify({'error': f'Network error: {str(e)}'}), 500
     except Exception as e:
         print(f"Error generating MCQ questions: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Error generating questions: {str(e)}'}), 500
 
 def parse_mcq_questions(text, num_questions):
     """Parse MCQ questions from Gemini response text"""
     import re
     questions = []
     
-    # Split by question markers
+    # Clean up the text - remove markdown formatting if present
+    text = re.sub(r'```[a-z]*\n?', '', text)
+    text = re.sub(r'```', '', text)
+    
+    # Try multiple patterns to split questions
+    # Pattern 1: Q1., Q2., etc.
     question_blocks = re.split(r'Q\d+\.', text)
+    if len(question_blocks) <= 1:
+        # Pattern 2: 1., 2., etc.
+        question_blocks = re.split(r'\n\s*\d+\.', text)
+    if len(question_blocks) <= 1:
+        # Pattern 3: Just split by double newlines
+        question_blocks = re.split(r'\n\n+', text)
+    
     question_blocks = [block.strip() for block in question_blocks if block.strip()]
     
     for i, block in enumerate(question_blocks[:num_questions]):
         try:
             # Extract question text (before options)
-            question_match = re.search(r'^(.+?)(?=A\)|$)', block, re.DOTALL)
-            question_text = question_match.group(1).strip() if question_match else f"Question {i+1}"
+            # Try multiple patterns
+            question_match = re.search(r'^(.+?)(?=\n\s*[A-D]\)|$)', block, re.DOTALL | re.MULTILINE)
+            if not question_match:
+                question_match = re.search(r'^(.+?)(?=A\)|$)', block, re.DOTALL)
             
-            # Extract options
+            question_text = question_match.group(1).strip() if question_match else f"Question {i+1}"
+            # Clean up question text
+            question_text = re.sub(r'^\d+\.\s*', '', question_text).strip()
+            question_text = re.sub(r'^Q\d+\.\s*', '', question_text).strip()
+            
+            # Extract options - try multiple patterns
             options = {}
             for option in ['A', 'B', 'C', 'D']:
-                option_match = re.search(rf'{option}\)\s*(.+?)(?=[A-D]\)|Correct Answer:|$)', block, re.DOTALL)
+                # Pattern 1: A) option text
+                option_match = re.search(rf'{option}\)\s*(.+?)(?=\n\s*[A-D]\)|Correct Answer:|Answer:|$)', block, re.DOTALL | re.MULTILINE)
+                if not option_match:
+                    # Pattern 2: A. option text
+                    option_match = re.search(rf'{option}\.\s*(.+?)(?=\n\s*[A-D]\.|Correct Answer:|Answer:|$)', block, re.DOTALL | re.MULTILINE)
+                if not option_match:
+                    # Pattern 3: A) option text (simpler)
+                    option_match = re.search(rf'{option}\)\s*(.+?)(?=[A-D]\)|Correct Answer:|$)', block, re.DOTALL)
+                
                 if option_match:
-                    options[option] = option_match.group(1).strip()
+                    option_text = option_match.group(1).strip()
+                    # Clean up option text
+                    option_text = re.sub(r'\n+', ' ', option_text).strip()
+                    options[option] = option_text
             
-            # Extract correct answer
+            # If we don't have all 4 options, try to fill them
+            if len(options) < 4:
+                # Try to find options in a different format
+                lines = block.split('\n')
+                option_letters = ['A', 'B', 'C', 'D']
+                for line in lines:
+                    for opt in option_letters:
+                        if opt not in options:
+                            if re.match(rf'^\s*{opt}[\)\.]\s*.+', line, re.IGNORECASE):
+                                options[opt] = re.sub(rf'^\s*{opt}[\)\.]\s*', '', line, flags=re.IGNORECASE).strip()
+            
+            # Ensure we have at least 4 options
+            for opt in ['A', 'B', 'C', 'D']:
+                if opt not in options:
+                    options[opt] = f"Option {opt}"
+            
+            # Extract correct answer - try multiple patterns
+            correct_answer = 'A'  # Default
             correct_match = re.search(r'Correct Answer:\s*([A-D])', block, re.IGNORECASE)
-            correct_answer = correct_match.group(1).upper() if correct_match else 'A'
+            if not correct_match:
+                correct_match = re.search(r'Answer:\s*([A-D])', block, re.IGNORECASE)
+            if not correct_match:
+                correct_match = re.search(r'Correct:\s*([A-D])', block, re.IGNORECASE)
+            if not correct_match:
+                # Try to find it at the end of the block
+                correct_match = re.search(r'([A-D])\s*$', block.strip(), re.IGNORECASE)
+            
+            if correct_match:
+                correct_answer = correct_match.group(1).upper()
             
             questions.append({
                 'id': i + 1,
@@ -144,12 +251,17 @@ def parse_mcq_questions(text, num_questions):
                 'options': options,
                 'correctAnswer': correct_answer
             })
+            
+            print(f"Parsed question {i+1}: {question_text[:50]}...")
+            
         except Exception as e:
             print(f"Error parsing question {i+1}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             # Fallback: create a simple question structure
             questions.append({
                 'id': i + 1,
-                'question': f"Question {i+1}",
+                'question': f"Question {i+1} - Parsing error occurred",
                 'options': {'A': 'Option A', 'B': 'Option B', 'C': 'Option C', 'D': 'Option D'},
                 'correctAnswer': 'A'
             })

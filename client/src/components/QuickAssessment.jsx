@@ -33,6 +33,11 @@ const QuickAssessment = () => {
         body: JSON.stringify({ subject, numQuestions }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
       const data = await response.json();
       
       if (data.error) {
@@ -41,11 +46,18 @@ const QuickAssessment = () => {
         return;
       }
 
+      if (!data.questions || data.questions.length === 0) {
+        alert("No questions were generated. Please try again with a different subject.");
+        setLoading(false);
+        return;
+      }
+
       setQuestions(data.questions || []);
       setLoading(false);
     } catch (error) {
       console.error("Error generating questions:", error);
-      alert("Failed to generate questions. Please try again.");
+      const errorMessage = error.message || "Failed to generate questions. Please check your connection and try again.";
+      alert(`Error: ${errorMessage}`);
       setLoading(false);
     }
   };
