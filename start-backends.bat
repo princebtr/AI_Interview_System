@@ -1,17 +1,9 @@
 @echo off
-echo Starting Interview System Backends...
-echo.
-
-echo Starting Express Backend (Port 5000)...
-start "Express Backend" cmd /k "cd express && npm run dev"
-
-echo Starting Flask AI Backend (Port 5001)...
-start "Flask AI Backend" cmd /k "cd server && python app.py"
-
-echo.
-echo Both backends are starting...
-echo Express Backend: http://localhost:5000
-echo Flask AI Backend: http://localhost:5001
-echo.
-echo Press any key to exit...
-pause
+cd /d "%~dp0server"
+if not exist .venv\Scripts\python.exe (
+  echo server\.venv not found. Create it with:
+  echo   cd server ^&^& python -m venv .venv ^&^& .venv\Scripts\pip install -r requirements.txt
+  exit /b 1
+)
+echo Starting Django backend on http://localhost:8000 ...
+.venv\Scripts\python.exe manage.py runserver 8000

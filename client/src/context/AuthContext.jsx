@@ -104,27 +104,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register function
-  const register = async (userData) => {
-    try {
-      dispatch({ type: "AUTH_START" });
-      const response = await api.post("/auth/register", userData);
-
-      dispatch({
-        type: "AUTH_SUCCESS",
-        payload: response.data,
-      });
-
-      toast.success("Registration successful!");
-      return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.message || "Registration failed";
-      dispatch({ type: "AUTH_FAILURE", payload: message });
-      toast.error(message);
-      return { success: false, error: message };
-    }
-  };
-
   // Login function
   const login = async (userData) => {
     try {
@@ -156,6 +135,19 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: "LOGOUT" });
       toast.success("Logged out successfully");
     }
+  };
+
+  // Revoke every session of this account (other devices included), then sign out here.
+  const logoutEverywhere = async () => {
+    try {
+      await api.post("/auth/logout-all");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Couldn't sign out other devices. Try again.");
+      return { success: false };
+    }
+    dispatch({ type: "LOGOUT" });
+    toast.success("Signed out on every device");
+    return { success: true };
   };
 
   // Update user details
@@ -192,6 +184,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Institution details changed (name, logo): refresh them everywhere.
+  const updateInstitution = (institution) => {
+    dispatch({ type: "UPDATE_USER", payload: { institution } });
+  };
+
   // Clear error
   const clearError = () => {
     dispatch({ type: "CLEAR_ERROR" });
@@ -199,11 +196,12 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     ...state,
-    register,
     login,
     logout,
+    logoutEverywhere,
     updateUser,
     updatePassword,
+    updateInstitution,
     clearError,
     loadUser,
   };

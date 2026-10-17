@@ -1,19 +1,48 @@
-# Interview System - MERN Stack with Secure Authentication
+# Cohortix
 
-A comprehensive interview system built with MERN stack featuring secure user authentication, AI-powered question generation, and real-time monitoring capabilities.
+A multi-tenant assessment and AI interview platform for schools and colleges. Each institution gets its own isolated workspace of admins, educators and students, with AI-generated questions, scheduled tests, scored interviews and live proctoring.
 
 ## 🚀 Features
 
 ### Authentication System
 
-- **Secure Registration & Login** with JWT tokens
-- **Password hashing** using bcryptjs with salt rounds
-- **Account lockout** after multiple failed login attempts
+- **Institution branding**: each school or college uploads its logo; its name and logo lead the
+  app ("Powered by Cohortix"), and `/login?school=<slug>` opens its branded sign-in page
+- **Three role experiences, one design system**: admins get an institution command centre
+  (blue), educators a teaching workspace (emerald), students a personal learning hub (violet)
+- **Institution onboarding** by the platform operator (no public sign-up)
+- **Roles**: admin, educator and student, each scoped to one institution
+- **Temporary passwords** that must be replaced at first sign-in
+- **JWT login** with bcrypt password hashing
+- **Login throttling**: at most 5 password checks per email per 15 minutes
 - **Form validation** with comprehensive error handling
 - **Protected routes** with role-based access control
-- **Session management** with secure cookies
+- **Bearer-token sessions**, revoked everywhere when a password changes
 
-### Interview System
+### Scheduled tests
+
+- Educators build **timed multiple-choice tests** from the question bank: title, cohort, start
+  time, duration, number of questions and marks per question
+- Students see them under **My tests** (and on their home page) with a countdown; the test
+  opens at its start time and closes for everyone when the duration ends
+- One attempt per student, questions shuffled per student, answers **autosaved** as they go,
+  resumable after a refresh, and **submitted automatically** when time runs out
+- Graded on the server; correct answers and explanations are revealed only after the test closes
+- Educators follow live results per student (submitted, in progress, not started, missed)
+
+### Proctoring in every test
+
+- **Scheduled tests** are always proctored: full screen, camera checks, phone detection and
+  microphone checks, each with its own limit; educators choose the checks and limits. Reaching a
+  limit submits the test automatically, with the reason recorded
+- **Practice tests** are proctored with the same default rules (no mark deductions, since practice
+  is scored as a percentage), so students practise under real conditions
+- **AI interviews** keep their live proctoring panel (people in frame, phone, tab switches), with the same camera evidence rules as tests
+- Camera violations in scheduled tests deduct marks (5 by default); the final score never goes
+  below zero. Every event is logged with time, confidence and action; educators review the
+  timeline and can dismiss a flag (refunding its marks)
+
+### Practice and AI features
 
 - **AI-powered question generation** using Google's Gemini API
 - **Real-time face detection** and monitoring
@@ -24,16 +53,15 @@ A comprehensive interview system built with MERN stack featuring secure user aut
 
 ## 🛠️ Tech Stack
 
-### Backend (Express.js)
+### Backend (Django)
 
-- **Node.js** with Express.js framework
-- **MongoDB** with Mongoose ODM
-- **JWT** for authentication
-- **bcryptjs** for password hashing
-- **express-validator** for input validation
-- **helmet** for security headers
-- **express-rate-limit** for rate limiting
-- **CORS** for cross-origin requests
+- **Django 5.2** with the **django-mongodb-backend** (MongoDB / Atlas)
+- **JWT** (PyJWT) for authentication, **bcrypt** for password hashing
+- **django-cors-headers** for cross-origin requests
+- `institutions` app: tenants, cohorts, admin tools, branding, audit log
+- `accounts` app: users, login, profile, login throttling
+- `assessments` app: question bank, scheduled tests, sitting and grading
+- `ai` app: Gemini question generation and evaluation, camera checks (YOLO11m, YuNet faces)
 
 ### Frontend (React.js)
 
@@ -41,7 +69,11 @@ A comprehensive interview system built with MERN stack featuring secure user aut
 - **React Router** for navigation
 - **React Hook Form** for form management
 - **Axios** for API calls
-- **Tailwind CSS** for styling
+- **Tailwind CSS v4** for styling. Design tokens live in `client/src/index.css`: the Plus
+  Jakarta Sans type, radii, role-tinted shadows and a palette per role (admin blue → indigo,
+  educator emerald → teal, student violet → fuchsia; signed-out screens indigo → violet).
+  Shared components are in `client/src/components/ui.jsx`; `components/styles.js` has the
+  button and input class recipes for links and bare inputs
 - **React Hot Toast** for notifications
 - **Heroicons** for icons
 
@@ -49,9 +81,9 @@ A comprehensive interview system built with MERN stack featuring secure user aut
 
 Before running this application, make sure you have the following installed:
 
-- **Node.js** (v16 or higher)
-- **MongoDB** (v4.4 or higher)
-- **npm** or **yarn** package manager
+- **Python** 3.11 or 3.12
+- **Node.js** (v18 or higher) and npm
+- **MongoDB** (local) or a free MongoDB Atlas cluster
 
 ## 🔧 Installation & Setup
 
@@ -59,56 +91,22 @@ Before running this application, make sure you have the following installed:
 
 ```bash
 git clone <your-repo-url>
-cd interview-system
+cd AI_Interview_System
 ```
 
-### 2. Backend Setup (Express)
-
-Navigate to the express directory:
+### 2. Backend Setup (Django)
 
 ```bash
-cd express
+cd server
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                 # then fill in the values
+python manage.py migrate
+python manage.py runserver 8000
 ```
 
-Install dependencies:
-
-```bash
-npm install
-```
-
-Set up environment variables:
-
-```bash
-# Copy the config file
-cp config.env .env
-
-# Edit the .env file with your configuration
-```
-
-Update the `config.env` file with your settings:
-
-```env
-NODE_ENV=development
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/interview_system
-JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
-JWT_EXPIRE=7d
-BCRYPT_ROUNDS=12
-```
-
-**Important**: Change the `JWT_SECRET` to a strong, random string in production!
-
-Start the backend server:
-
-```bash
-# Development mode with nodemon
-npm run dev
-
-# Or production mode
-npm start
-```
-
-The backend will be running on `http://localhost:5000`
+Key settings in `server/.env`: `MONGODB_URI`, `DJANGO_SECRET_KEY`, `JWT_SECRET`, `GEMINI_API_KEY`.
+Never commit `server/.env`. The API runs on `http://localhost:8000/api`.
 
 ### 3. Frontend Setup (React)
 
@@ -165,57 +163,233 @@ sudo systemctl start mongod
 
 ### Authentication Security
 
-- JWT tokens with expiration
-- Secure HTTP-only cookies
-- Account lockout after 5 failed attempts (2-hour lockout)
-- Rate limiting on authentication endpoints
+- JWT Bearer tokens with expiration; changing or resetting a password revokes every other session
+- No cookie authentication, so there is no CSRF surface; JSON endpoints require `Content-Type: application/json`
+- At most 5 password checks per email per 15 minutes, identical for registered and unknown
+  emails (no account enumeration); the same limit protects password changes
 
 ### Input Validation
 
-- Server-side validation with express-validator
+- Server-side validation in Django views
 - Client-side validation with react-hook-form
-- XSS protection with helmet
 - CORS configuration
 
 ### API Security
 
-- Rate limiting (100 requests per 15 minutes)
+- All AI endpoints require a valid JWT
 - Stricter rate limiting for auth routes (5 requests per 15 minutes)
 - Request timeout configuration
 - Error handling without sensitive information exposure
 
 ## 📱 Usage
 
-### 1. Registration
+### 1. Onboard an institution
 
-- Navigate to `/register`
-- Fill in your details (name, email, password)
-- Password must contain at least one uppercase, lowercase, and number
-- Click "Create account"
+There is no public sign-up. The platform operator onboards each school or college
+from the command line, which creates the institution and its first admin:
 
-### 2. Login
+```bash
+cd server && source .venv/bin/activate
+python manage.py onboard_institution          # guided prompts
+```
+
+Or non-interactively (a temporary password is generated and printed once):
+
+```bash
+python manage.py onboard_institution --no-input \
+  --name "Springfield College" --type college \
+  --website springfield.edu --academic-year 2026-27 \
+  --admin-name "Asha Rao" --admin-email asha@springfield.edu
+```
+
+Run `python manage.py onboard_institution --help` for every option. Send the admin
+their sign-in details over a secure channel; they must choose a new password the
+first time they sign in.
+
+### 2. Add users
+
+Admins open **Administration → Users** in the sidebar and choose **Add user**:
+
+- Pick a role: **Student**, **Educator** or **Admin**.
+- Students need a **cohort** (e.g. `CSE-2027`). Pick one, or create it on the spot with **New cohort**.
+- Set a password or **Generate** one. By default the person must choose their own
+  password the first time they sign in.
+- The confirmation screen shows the sign-in details to share (the password isn't shown again).
+
+### 3. Login
 
 - Navigate to `/login`
 - Enter your email and password
-- Click "Sign in"
+- On first sign-in, replace the temporary password
 
-### 3. Dashboard
+### 4. Dashboard and settings
 
-- View and update your profile information
-- Change your password
-- Access the interview system
+- Open **Settings** from your name at the bottom left of the sidebar. Tabs: **Profile** (name,
+  email), **Account** (role, institution, sign out here or on all devices), **Password**, and for
+  admins **Institution** (logo, name, academic year)
+- Open your role's home: dashboard, teaching workspace or student hub
 
-### 4. Interview System
+### 5. AI interview practice
 
 - Navigate to `/interview`
 - Use the camera system for face detection
 - Generate AI questions by entering a subject
 - Submit answers for AI evaluation
 
+### 6. Scheduled tests
+
+Educators (and admins) open **Tests → Create test**:
+
+- Enter a title, pick the **cohort**, the **start time** (or **Start now**) and the **duration**.
+- Set the **number of questions** and **marks per question**, then tick questions from the
+  question bank (or **Pick N at random**). Short on questions? Generate more with the AI generator.
+- **Schedule test**. The test page shows each student's status and score as they submit.
+  A test can be deleted until the first student starts it.
+
+Students open **My tests**: live tests show **Start test**, upcoming ones a countdown. Answers
+save automatically; use A–D to answer and ←/→ to move. Whatever is answered when time runs
+out is submitted automatically.
+
+### 7. Proctored tests
+
+Every scheduled test is proctored. Educators choose which checks run and their limits in the
+**Proctoring** card when creating a test (at least one check must stay on), and can change them
+until the first student starts (**Edit rules** on the test page). Tests that students had already
+started before proctoring was added keep running without it. Defaults:
+
+| Check | What counts as one violation | Limit (auto-submit) | Penalty |
+| --- | --- | --- | --- |
+| Full screen | Leaving full screen, switching tab or app, or leaving/reloading the page | 3 | – |
+| Microphone | About 2.5 s of speech within 4 s (sustained speech) | 5 | – |
+| Camera | No one in view in 5 of the checks within 12 s, more than one person in 4 within 10 s, or the camera off for 30 s | 5 | 5 marks |
+| Phone | A phone seen (≥35% confidence) in 3 of the checks within 10 s | 3 | – |
+
+A limit of 0 means "warn only". One continuing problem counts once, and again every 60 s while it
+lasts (it ends once the recent checks are clear); a full-screen exit and the tab hiding with it count as one switch (each exit after the
+student returns to full screen counts again).
+
+**Practice tests** follow these defaults too (camera checks only where the server can run them),
+without mark deductions. Students see the rules, check their devices and enter full screen before
+the first question; reaching a limit submits the practice test with the answers given so far, and
+its result shows why. **Quit** ends a practice test without scoring it.
+
+Students see the rules, allow the camera and microphone, then **Enter full screen and start**:
+the test starts only once full screen succeeds. During the test the page covers the app (no
+navigation) and a live **Proctoring** panel shows the camera, people in frame, phone, microphone,
+full screen and the count per check; a warning appears after each violation. Leaving
+full screen blocks the questions until the student returns. After a reload the test waits behind
+a resume screen until devices and full screen are back.
+
+**Scores.** `final = max(0, raw − penalties)`, where `raw` is marks from correct answers and
+penalties are the camera-violation deductions recorded before submission. There are no partial
+marks or negative marking. Educators adjust a result only by reviewing violations: open a
+student's **Report**, then **Uphold** or **Dismiss** each event; dismissing refunds its penalty
+and recomputes the final score. An automatic submission isn't undone by a dismissal.
+
+**Authority.** The browser detects; the server decides. Each event carries an id that is unique
+per attempt, so retries and duplicates never count twice; counters and penalties only change while
+the attempt is open; the attempt is finalised exactly once (by the student, the timer or a limit,
+whichever is first), and the reason is stored (`STUDENT_SUBMITTED`, `TIME_LIMIT`,
+`SCREEN_SWITCH_LIMIT`, `VOICE_VIOLATION_LIMIT`, `FACE_VIOLATION_LIMIT`, `PHONE_DETECTION_LIMIT`).
+
+**Privacy.** Nothing is recorded. Camera frames (one every 2 s, at most 640 px, JPEG) are
+analysed in memory on the API server and discarded; only the resulting facts (people, faces,
+phone boxes) go back to the browser, and only confirmed incidents are stored; audio is analysed only in the browser. Camera and
+microphone are released when the test ends.
+
+**Limitations.**
+- Camera checks find people and faces; nobody is identified (a different person sitting the test
+  isn't detected). They need the models in `server/models/` and `ultralytics`; without them,
+  camera and phone checks are shown as unavailable and can't be turned on.
+- Detection is not perfect (measured rates below): expect occasional missed phones, mainly small
+  or partly hidden ones, and rare false incidents. Educators should review incidents before acting
+  on them (**Uphold** / **Dismiss**).
+- "Looking away" is a hint shown to the student only; it never counts as a violation.
+- The microphone check detects sustained speech; it can't count distinct voices. Loud TV or music
+  with speech may be flagged.
+- Phones are only detected when the camera can see them.
+- Browsers can't prevent a second device or another person out of view. Determined students can
+  also tamper with their own browser; the server records how many camera checks ran
+  ("Camera checks run" in the report) so missing proctoring is visible.
+- Full screen needs a desktop browser: iPhone Safari doesn't support it for web pages.
+- Camera checks run on the API server: about 85 ms of CPU per check on an Apple M-series laptop,
+  one object-model inference at a time, so one process handles roughly 20 students at a check
+  every 2 s. Large sittings need more workers, a GPU, a smaller model
+  (`PROCTOR_OBJECT_MODEL=yolo11s.pt`, ~2x faster, lower phone recall), or a longer
+  `PROCTOR_FRAME_INTERVAL_MS`.
+
+#### How camera detection works
+
+Per check (`server/ai/vision.py`, rules in `server/ai/detection.py`):
+
+1. **Objects:** one YOLO11m pass at 640 px for people, phones and phone look-alikes (remote,
+   mouse, keyboard, laptop, TV, book). A phone box overlapping a *more confident* look-alike box
+   (IoU > 0.5) is dropped.
+2. **Faces:** OpenCV's YuNet face detector (232 KB, ~4 ms) with eye/nose landmarks. Webcam framing
+   (head and shoulders, often dim) is where person detection fails, so a confident face (≥0.8)
+   counts as someone present even when no person box is found. Two people, or two confident faces,
+   mean "more than one person".
+3. **Head turn:** the nose's offset from the middle of the eyes gives "Looking away" (status only).
+4. **Phone states:** below 25% *No phone detected*; 25-35% *Phone suspected* (shown, not evidence);
+   ≥35% counts as evidence. Boxes are drawn on the student's preview.
+
+In the browser (`createCameraEvidence` in `client/src/utils/proctoring.js`, shared by scheduled
+tests, practice tests and AI interviews) each condition keeps a rolling window of recent checks:
+an incident needs several matching checks in the window, so one blurry frame or a hand over the
+face never counts, and one good frame in the middle of a real problem doesn't reset it. Old checks
+age out; failed checks (network, model error) are not evidence either way and are reported
+separately as *technical* events, as are camera disconnections. Each incident is reported once
+(with an id, so the server records it once), then again only after the cooldown.
+
+**Measured accuracy** (single frames, `python manage.py evaluate_proctoring`, labelled images
+from COCO 2017 val: 200 phone / 200 hard negatives with laptops, remotes, keyboards, books and
+mice; 329 webcam-style crops):
+
+| | Before (YOLOv8n) | Now |
+| --- | --- | --- |
+| One person at the desk recognised as exactly one | 88.7% | 98.0% |
+| Empty scene flagged as "no one" (recall / false-positive rate) | 98.7% / 2.2% | 98.0% / 1.7% |
+| "More than one person" precision / recall | 68% / 97% | 100% / 93% |
+| Phone recall / precision / false-positive rate | 32% / 94% / 2.0% | 61% / 93% / 4.5% |
+| Phone recall for phones ≥0.5% of the frame (112 images) | 48% | 78% |
+| Latency per check (Apple M-series CPU) | 19 ms | 85 ms |
+
+These are per-frame rates on photos, not live webcams; an incident additionally needs repeated
+evidence, which removes most single-frame errors but cannot fix a phone the model never sees. Small
+sample for "more than one person" (29 images). Re-measure on your own labelled frames before
+changing thresholds.
+
+#### Tuning
+
+All values live in `PROCTORING` in `server/config/settings.py`; each can be overridden with an
+environment variable (restart after changing):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PROCTOR_OBJECT_MODEL` / `PROCTOR_FACE_MODEL` | `yolo11m.pt` / `face_detection_yunet_2023mar.onnx` | Model files in `server/models/` |
+| `PROCTOR_INFERENCE_SIZE` | 640 | YOLO input size |
+| `PROCTOR_PERSON_CONFIDENCE` | 0.5 | A person box counts |
+| `PROCTOR_FACE_CONFIDENCE` / `PROCTOR_FACE_RESCUE_CONFIDENCE` | 0.6 / 0.8 | A face is visible / alone proves presence |
+| `PROCTOR_PHONE_SUSPECT_CONFIDENCE` / `PROCTOR_PHONE_CONFIDENCE` | 0.25 / 0.35 | "Phone suspected" / counts as evidence |
+| `PROCTOR_LOOKALIKE_IOU` | 0.5 | Overlap with a likelier look-alike that drops a phone box |
+| `PROCTOR_LOOK_AWAY_YAW` | 0.6 | Head turn shown as "Looking away" |
+| `PROCTOR_FRAME_INTERVAL_MS` | 2000 | Browser check interval |
+| `PROCTOR_MIN_SERVER_INTERVAL_MS` | 1000 | Server refuses faster checks (per sitting) |
+| `PROCTOR_ABSENCE_WINDOW_MS` / `PROCTOR_ABSENCE_FRAMES` | 12000 / 5 | Checks with no one needed in the window |
+| `PROCTOR_MULTIPLE_WINDOW_MS` / `PROCTOR_MULTIPLE_FRAMES` | 10000 / 4 | Same for more than one person |
+| `PROCTOR_PHONE_WINDOW_MS` / `PROCTOR_PHONE_FRAMES` | 10000 / 3 | Same for phones |
+| `PROCTOR_CLEAR_RATIO` | 0.2 | An incident ends when at most this share of the window shows it |
+| `PROCTOR_COOLDOWN_MS` | 60000 | A continuing incident counts again after this long |
+| `PROCTOR_CAMERA_GRACE_MS` | 30000 | Camera off this long counts as a camera violation |
+
+Raising a `*_FRAMES` value or lowering a confidence trades false alarms for misses; measure with
+`evaluate_proctoring` (below) after any change. The browser receives the timing values with each
+test's rules, so no frontend rebuild is needed.
+
 ## 🗂️ Project Structure
 
 ```
-interview-system/
+AI_Interview_System/
 ├── client/                 # React frontend
 │   ├── src/
 │   │   ├── components/     # React components
@@ -225,14 +399,13 @@ interview-system/
 │   │   ├── utils/          # Utility functions
 │   │   └── ...
 │   └── package.json
-├── express/                # Express backend
-│   ├── controllers/        # Route controllers
-│   ├── middleware/         # Custom middleware
-│   ├── models/            # MongoDB models
-│   ├── routes/            # API routes
-│   ├── server.js          # Main server file
-│   └── package.json
-├── server/                # Legacy Flask server (optional)
+├── server/                 # Django backend
+│   ├── config/             # Settings, URLs
+│   ├── institutions/       # Tenants + onboard_institution command
+│   ├── accounts/           # Users, roles & authentication
+│   ├── assessments/        # Question bank + scheduled tests
+│   ├── ai/                 # Gemini + camera-check AI features
+│   └── manage.py
 └── README.md
 ```
 
@@ -240,12 +413,96 @@ interview-system/
 
 ### Authentication Routes
 
-- `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `GET /api/auth/logout` - User logout
+- `POST /api/auth/logout-all` - Sign out on every device (revokes all of the user's tokens)
 - `GET /api/auth/me` - Get current user
 - `PUT /api/auth/updatedetails` - Update user details
 - `PUT /api/auth/updatepassword` - Update password
+
+### Institution Admin Routes (JWT required)
+
+- `GET /api/institution/overview` - Dashboard KPIs, 14-day practice activity, cohort performance (admin)
+- `GET /api/institution/activity` - Audit log of administrative actions (admin)
+- `GET /api/institution/users` - List users (admin); filters `role`, `cohort`, `q`, `limit`, `offset`
+- `POST /api/institution/users` - Add a user (admin): `name`, `email`, `role`, `password`, `cohortId` (students), `requirePasswordChange`
+- `POST /api/institution/users/import` - CSV import (admin), multipart `file`; `commit=false` validates every row, `commit=true` imports the valid ones; `createCohorts=true` creates missing cohorts
+- `POST /api/institution/users/<id>/reset-password` - New temporary password, signs the user out everywhere (admin)
+- `GET /api/institution/cohorts` - Cohorts with student, sign-in and practice stats (admin, educator)
+- `POST /api/institution/cohorts` - Create a cohort (admin): `name`
+- `GET /api/institution/cohorts/<id>` - One cohort's stats; `DELETE` removes an empty cohort (admin)
+
+### Institution Profile and Branding
+
+- `GET /api/institution` - The signed-in user's institution (any role); `PATCH` updates `name`, `academicYear`, `website` (admin)
+- `POST /api/institution/logo` - Upload a logo (admin), multipart `logo`: PNG/JPG/WebP up to 2 MB, stored as a 256 px PNG; `DELETE` removes it
+- `GET /api/institutions/<id>/logo` - The logo image (public, cacheable; linked from `institution.logoUrl`)
+- `GET /api/institutions/by-slug/<slug>` - Public name and logo for the branded sign-in page
+
+### Educator Routes (JWT required; educators and admins)
+
+- `GET /api/teaching/overview` - Question-bank counts, cohort and subject performance
+- `GET /api/teaching/students` - Students with practice stats; filters `cohort`, `q`
+- `GET /api/questions` - Question bank; filters `subject`, `difficulty`, `mine`, `q`
+- `POST /api/questions` - Save reviewed questions (`{questions: [...]}`, up to 50)
+- `DELETE /api/questions/<id>` - Delete a question (its author or an admin)
+
+### Scheduled Test Routes (JWT required)
+
+Educators see the tests they created; admins see every test in the institution.
+
+- `GET /api/assessments` - Tests with submission counts and average score (educator, admin)
+- `POST /api/assessments` - Schedule a test (educator, admin): `title`, `cohortId`, `startsAt`
+  (ISO 8601 with a time zone), `durationMinutes` (5-300), `marksPerQuestion` (1-100),
+  `numQuestions`, `questionIds` (from the question bank, 1-100), optional `instructions`,
+  `subject`, `shuffleQuestions`. The questions are copied into the test, so later bank edits
+  don't change it
+- `GET /api/assessments/<id>` - Questions with answer keys, stats and every student's result;
+  `DELETE` removes it until a student starts (its creator or an admin)
+- `GET /api/me/tests` - The student's tests (their cohort only) with their attempt status
+- `GET /api/me/tests/<id>` - One test as the student may see it now (no answer key until it closes)
+- `POST /api/me/tests/<id>/start` - Start, or resume, the student's single attempt while it's open
+- `PUT /api/me/tests/<id>/answers` - Autosave `{answers: {questionId: "A"-"D"}, review: [questionId]}`
+- `POST /api/me/tests/<id>/submit` - Final submission (same body); accepted for 15 s after the
+  close for network delay, after which the last autosave is graded
+
+### Proctoring Routes (JWT required)
+
+The API keeps the name `monitoring` for the rules object. Every scheduled test is proctored:
+`enabled` may be omitted or `true`; `false` is refused.
+
+- `GET /api/proctoring/capabilities` - Whether camera and phone checks can run here (educator, admin)
+- `PATCH /api/assessments/<id>` - `{monitoring: {...}}`: change the rules until a student starts
+  (keys: `enabled`, `fullscreenRequired`, `cameraRequired`, `microphoneRequired`, `phoneDetection`,
+  `maxScreenSwitches`, `maxVoiceViolations`, `maxFaceViolations`, `facePenalty`, `maxPhoneViolations`;
+  the same object on `POST /api/assessments`)
+- `GET /api/assessments/<id>/violations?student=<id>` - Event timeline (the test's creator or an admin)
+- `PATCH /api/assessments/<id>/violations/<eventId>` - `{reviewStatus: "upheld" | "dismissed"}` after submission
+- `POST /api/me/tests/<id>/violations` - Student: `{eventId, type, detail, confidence, answers, review}`;
+  types `screen_switch`, `voice`, `face`, `phone`, `technical`. Saves the answers, records the event
+  once, applies penalties and submits at a limit; returns the updated test
+- `POST /api/me/tests/<id>/frame` - Student: one webcam frame (multipart `image`), at most every
+  `PROCTOR_MIN_SERVER_INTERVAL_MS`; returns `{people, peopleConfidence, faces, faceConfidence,
+  lookingAway, phone, phoneSuspected, phoneConfidence, phoneBoxes, latencyMs}` (`phoneBoxes`:
+  `[x1, y1, x2, y2, confidence]`, 0-1). Nothing is stored. The test's `monitoring.detection`
+  holds the evidence rules the browser applies
+- Practice tests (student, own quiz only): `GET /api/ai/practice/<quizId>` (rules, counts, and the
+  result once submitted), `POST /api/ai/practice/<quizId>/violations` (same body as above with
+  `answers`; reaching a limit grades those answers once and returns `{submitted: true, result}`),
+  `POST /api/ai/practice/<quizId>/frame` (same as above). `generate-mcq-questions` returns the
+  practice rules as `monitoring`
+
+### Student Routes (JWT required)
+
+- `GET /api/me/performance` - Overall and per-subject scores, streak, areas to improve, history
+
+### AI Routes (JWT required, all `POST`)
+
+- `/api/ai/generate-mcq-questions` - Any role. Students get a `quizId` and questions **without**
+  answer keys; educators and admins get answer keys and explanations to review.
+- `/api/ai/evaluate-mcq-answers` - Students: `{quizId, userAnswers}`, graded on the server, once.
+- `/api/ai/generate-question`, `/api/ai/evaluate-answer` - Students: interview question by `questionId`, scored once.
+- `/api/ai/detect-faces`, `/api/ai/detect-phone`, `/api/ai/session` - Students (proctoring).
 
 ### Health Check
 
@@ -257,7 +514,7 @@ interview-system/
 2. **Environment Variables**: Never commit `.env` files to version control
 3. **HTTPS**: Use HTTPS in production for secure cookie transmission
 4. **Database Security**: Secure your MongoDB instance
-5. **Rate Limiting**: Adjust rate limits based on your needs
+5. **Rate Limiting**: Add throttling in front of the API (e.g. a reverse proxy) before going public
 6. **CORS**: Configure CORS properly for your domain
 
 ## 🐛 Troubleshooting
@@ -266,12 +523,12 @@ interview-system/
 
 1. **MongoDB Connection Error**
 
-   - Ensure MongoDB is running
-   - Check the connection string in config.env
+   - Ensure MongoDB is running (or your Atlas IP allow-list includes you)
+   - Check `MONGODB_URI` in `server/.env`
 
 2. **CORS Errors**
 
-   - Verify CORS configuration in server.js
+   - Verify `CORS_ALLOWED_ORIGINS` in `server/.env`
    - Check if frontend URL is in allowed origins
 
 3. **JWT Token Issues**
@@ -280,17 +537,23 @@ interview-system/
    - Check JWT_SECRET configuration
 
 4. **Port Conflicts**
-   - Change PORT in config.env if 5000 is occupied
-   - Update frontend axios baseURL accordingly
+   - Run `runserver` on another port if 8000 is occupied
+   - Set `VITE_API_URL` in the client accordingly
 
 ## 📝 Development
 
 ### Adding New Features
 
-1. Create new routes in `express/routes/`
-2. Add controllers in `express/controllers/`
+1. Add views and URLs in the relevant Django app (`server/institutions`, `server/accounts`,
+   `server/assessments` or `server/ai`)
+2. Add or change models, then run `makemigrations` and `migrate`
 3. Update frontend components as needed
 4. Test thoroughly before deployment
+
+### Tests
+
+- Backend: `cd server && .venv/bin/python manage.py test` (uses a `test_` copy of the database)
+- Frontend logic (monitoring rules, speech detection): `cd client && npm test`
 
 ### Code Style
 
