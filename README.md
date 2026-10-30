@@ -1,6 +1,6 @@
 # Cohortix
 
-A multi-tenant assessment and AI interview platform for schools and colleges. Each institution gets its own isolated workspace of admins, educators and students, with AI-generated questions, scheduled tests, scored interviews and live proctoring.
+A multi-tenant assessment and AI interview platform for schools and colleges. Each institution gets its own isolated workspace of admins, educators and students, organised as Batch → Department → Section → Cohort, with a shared question bank (AI-generated, hand-written or imported from a sheet), scheduled and proctored tests, scored AI interviews, notes and messages with comments, and performance reports.
 
 ## 🚀 Features
 
@@ -18,6 +18,24 @@ A multi-tenant assessment and AI interview platform for schools and colleges. Ea
 - **Form validation** with comprehensive error handling
 - **Protected routes** with role-based access control
 - **Bearer-token sessions**, revoked everywhere when a password changes
+
+### Academic structure and people
+
+- Students are organised in a four-level tree: **Batch → Department → Section → Cohort**
+  (e.g. `2023-2027 → Computer Science → A → Lab group 1`). Names only need to be unique within
+  their parent
+- Every student sits in one cohort; tests and posts can be assigned to **any level**, and reach
+  everyone below it
+- Admins add people one at a time, or in bulk from a CSV: **add new users**, or **export** the
+  current list, edit it in a spreadsheet and **update existing users** (matched by email, with
+  every change shown before it's saved)
+
+### Question bank
+
+- Three ways to add multiple-choice questions under **Add Questions**: **generate with AI**
+  (review and approve every draft), **write your own**, or **import from a sheet** (CSV from
+  Excel or Google Sheets, with a sample file)
+- Every question is reviewed by an educator before it's saved, and duplicates are flagged
 
 ### Scheduled tests
 
@@ -179,11 +197,25 @@ brew services start mongodb-community
 sudo systemctl start mongod
 ```
 
+### 5. Upgrading an existing installation
+
+After pulling, always run `python manage.py migrate` (from `server/`, with the virtualenv
+active) and restart the API. Recent migrations:
+
+| Migration | What it does to existing data |
+| --- | --- |
+| `institutions` 0006, `accounts` 0005, `assessments` 0005 | Adds Batch → Department → Section → Cohort. Existing cohorts move under a batch named after the academic year with a "General" department and section (rename them under **Structure**); students and tests keep their cohort |
+| `board` 0001 | Notes & messages (new collections only) |
+| `assessments` 0006 | Shared audience base for tests and posts (no data changes) |
+| `board` 0002 | Comments and reactions; existing posts get comments switched on. Comments or reactions saved before migrating are kept |
+
+[`SETUP.md`](SETUP.md) has the same notes plus more setup detail.
+
 ## 🔐 Security Features
 
 ### Password Security
 
-- Passwords are hashed using bcryptjs with 12 salt rounds
+- Passwords are hashed with bcrypt (cost 12)
 - Minimum 6 characters with complexity requirements
 - Password confirmation validation
 
@@ -196,8 +228,11 @@ sudo systemctl start mongod
 
 ### Input Validation
 
-- Server-side validation in Django views
-- Client-side validation with react-hook-form
+- Server-side validation in Django views; client-side validation with react-hook-form
+- CSV imports check every row before anything is saved; exported CSVs escape cells that
+  spreadsheets would run as formulas (and imports undo that, so a round trip changes nothing)
+- Uploaded files on posts: an allow-list of types (decided by extension, never by what the browser
+  claims), 10 MB each, always served as downloads with `nosniff` and a sandboxing CSP
 - CORS configuration
 
 ### API Security
@@ -322,8 +357,12 @@ out is submitted automatically.
 
 Admins and educators open **Notes & Messages** and choose **New post**: pick **Message** or
 **Note**, choose who can see it (stop at any level: batch, department, section or cohort), write
-it and attach files if you like. Students find it under **Notes & Messages**; files download with
-their original names.
+it and attach files if you like. Untick **Allow comments** for an announcement that needs no replies.
+Students find it under **Notes & Messages**; files download with their original names.
+
+Under each post, students and staff can **react** (one click on 👍 ❤️ 🎉 💡 🤔 🙏) and **comment**.
+Comments from educators and admins carry a role badge. Everyone can delete their own comments; the
+post's author and admins can delete any comment on it.
 
 ### 10. Proctored tests
 
@@ -465,21 +504,25 @@ test's rules, so no frontend rebuild is needed.
 
 ```
 AI_Interview_System/
-├── client/                 # React frontend
+├── client/                    # React frontend
+│   ├── public/
+│   │   └── sample-questions.csv   # sample sheet for question imports
 │   ├── src/
-│   │   ├── components/     # React components
-│   │   │   ├── auth/       # Authentication components
-│   │   │   └── ...
-│   │   ├── context/        # React context (AuthContext)
-│   │   ├── utils/          # Utility functions
-│   │   └── ...
+│   │   ├── components/        # shared UI (ui.jsx, charts.jsx, GroupPicker.jsx, board/, admin/ …)
+│   │   ├── context/           # AuthContext
+│   │   ├── hooks/             # useApi, useUnreadPosts, proctoring hooks …
+│   │   ├── pages/             # admin/, educator/, student/, reports/, settings/, Board.jsx
+│   │   └── utils/             # API client, structure tree, reports, board, CSV helpers (+ *.test.js)
 │   └── package.json
-├── server/                 # Django backend
-│   ├── config/             # Settings, URLs
-│   ├── institutions/       # Tenants + onboard_institution command
-│   ├── accounts/           # Users, roles & authentication
-│   ├── assessments/        # Question bank + scheduled tests
-│   ├── ai/                 # Gemini + camera-check AI features
+├── server/                    # Django backend
+│   ├── config/                # settings, URLs, JSON/CSV helpers
+│   ├── institutions/          # tenants, Batch → Department → Section → Cohort, users admin,
+│   │                          # CSV import/export, audit log, onboard_institution command
+│   ├── accounts/              # users, roles, sign-in
+│   ├── assessments/           # question bank (+ CSV import), scheduled tests, proctoring
+│   ├── board/                 # notes & messages, attachments, comments, reactions
+│   ├── reports/               # student and group performance reports
+│   ├── ai/                    # Gemini questions and scoring, camera checks
 │   └── manage.py
 └── README.md
 ```
@@ -610,7 +653,7 @@ All take `days` = `30`, `90` (default), `180` or `365`.
 
 1. **Change JWT Secret**: Always change the `JWT_SECRET` in production
 2. **Environment Variables**: Never commit `.env` files to version control
-3. **HTTPS**: Use HTTPS in production for secure cookie transmission
+3. **HTTPS**: Use HTTPS in production so tokens and uploaded files are never sent in the clear
 4. **Database Security**: Secure your MongoDB instance
 5. **Rate Limiting**: Add throttling in front of the API (e.g. a reverse proxy) before going public
 6. **CORS**: Configure CORS properly for your domain
@@ -638,20 +681,39 @@ All take `days` = `30`, `90` (default), `180` or `365`.
    - Run `runserver` on another port if 8000 is occupied
    - Set `VITE_API_URL` in the client accordingly
 
+5. **A new feature half-works after pulling** (e.g. reactions work but comments are missing)
+   - Run `python manage.py migrate` and restart the API. MongoDB creates collections on first
+     use, so some features appear to work before their migration; the migrations are written to
+     pick up such data rather than fail
+
+6. **Backend tests seem to hang**
+   - Make sure only one test command is running (see **Development → Tests**)
+   - On a laptop, the machine may be sleeping: use `caffeinate -i` on macOS
+
 ## 📝 Development
 
 ### Adding New Features
 
 1. Add views and URLs in the relevant Django app (`server/institutions`, `server/accounts`,
-   `server/assessments` or `server/ai`)
+   `server/assessments`, `server/board`, `server/reports` or `server/ai`)
 2. Add or change models, then run `makemigrations` and `migrate`
 3. Update frontend components as needed
 4. Test thoroughly before deployment
 
 ### Tests
 
-- Backend: `cd server && .venv/bin/python manage.py test` (uses a `test_` copy of the database)
-- Frontend logic (monitoring rules, speech detection): `cd client && npm test`
+- Backend: `cd server && .venv/bin/python manage.py test --noinput`. It creates (and then drops)
+  a `test_` copy of the database named in `MONGODB_URI`, so point it at a local MongoDB rather
+  than your Atlas cluster:
+
+  ```bash
+  MONGODB_URI="mongodb://localhost:27017/ai_interview_system" .venv/bin/python manage.py test --noinput
+  ```
+
+  The suite takes about 3 minutes. Run one test command at a time: parallel runs share the same
+  `test_` database and break each other. On a Mac, prefix long runs with `caffeinate -i` so the
+  machine doesn't sleep partway through.
+- Frontend logic (proctoring rules, academic-structure tree, report helpers): `cd client && npm test`
 
 ### Code Style
 
