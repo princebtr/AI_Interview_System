@@ -7,11 +7,12 @@ from datetime import timedelta
 from django.utils import timezone
 
 from accounts.models import User
-from institutions.models import Cohort
+from institutions.models import LEVELS
 
 from .models import PracticeAttempt
 
-ANALYTICS_DAYS = 90  # window for "how is this cohort/subject doing" numbers
+ANALYTICS_DAYS = 90  # window for "how is this group/subject doing" numbers
+PLACEMENT_IDS = tuple(f"{level}_id" for level in LEVELS)
 
 
 def average(values):
@@ -64,51 +65,35 @@ def streak_days(timestamps):
     return streak
 
 
-def cohort_stats(institution, cohort_ids=None):
-    """Per-cohort student counts, sign-ins and practice over ANALYTICS_DAYS."""
-    cohorts = Cohort.objects.filter(institution=institution).order_by("name_key")
-    if cohort_ids is not None:
-        cohorts = cohorts.filter(pk__in=cohort_ids)
-    stats = {
-        c.pk: {
-            "id": str(c.pk),
-            "name": c.name,
-            "createdAt": c.created_at,
-            "studentCount": 0,
-            "activated": 0,
-            "attempts": 0,
-            "practice30Days": 0,
-            "_scores": [],
-        }
-        for c in cohorts
-    }
+def group_stats(institution):
+    """{(level, pk): {studentCount, activated, attempts, practice30Days, averageScore}}
+    for every batch, department, section and cohort that has students. Practice
+    covers ANALYTICS_DAYS. One pass over the students and one over the attempts."""
+    stats = defaultdict(lambda: {"studentCount": 0, "activated": 0, "attempts": 0, "practice30Days": 0, "_scores": []})
 
-    cohort_of = {}
+    groups_of = {}
     students = User.objects.filter(institution=institution, role="student", cohort__isnull=False)
-    for pk, cohort_id, last_login in students.values_list("pk", "cohort_id", "last_login"):
-        if cohort_id in stats:
-            cohort_of[pk] = cohort_id
-            stats[cohort_id]["studentCount"] += 1
-            stats[cohort_id]["activated"] += last_login is not None
+    for pk, *ids, last_login in students.values_list(*("pk", *PLACEMENT_IDS, "last_login")):
+        keys = [(level, group_id) for level, group_id in zip(LEVELS, ids) if group_id]
+        groups_of[pk] = keys
+        for key in keys:
+            stats[key]["studentCount"] += 1
+            stats[key]["activated"] += last_login is not None
 
     recent_cutoff = since(30)
     attempts = PracticeAttempt.objects.filter(
         institution=institution, created_at__gte=since(ANALYTICS_DAYS)
     ).values_list("user_id", "score", "created_at")
     for user_id, score, created_at in attempts:
-        cohort_id = cohort_of.get(user_id)
-        if cohort_id is None:
-            continue
-        entry = stats[cohort_id]
-        entry["attempts"] += 1
-        entry["_scores"].append(score)
-        entry["practice30Days"] += created_at >= recent_cutoff
+        for key in groups_of.get(user_id, ()):
+            entry = stats[key]
+            entry["attempts"] += 1
+            entry["_scores"].append(score)
+            entry["practice30Days"] += created_at >= recent_cutoff
 
-    result = []
     for entry in stats.values():
         entry["averageScore"] = average(entry.pop("_scores"))
-        result.append(entry)
-    return result
+    return dict(stats)
 
 
 def student_stats(institution, student_ids):

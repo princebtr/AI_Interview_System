@@ -5,7 +5,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.utils.html import format_html, format_html_join
 
-from institutions.models import AuditLog
+from institutions.models import ANCESTORS, AuditLog, Cohort
 
 from . import validators
 from .models import User
@@ -53,15 +53,20 @@ class UserAdminForm(forms.ModelForm):
             data["cohort"] = None  # staff have no cohort
         return data
 
+    def _post_clean(self):
+        super()._post_clean()
+        # Fill in the cohort's section, department and batch as well.
+        self.instance.place(self.instance.cohort if self.instance.cohort_id else None)
+
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     form = UserAdminForm
-    list_display = ["name", "email", "role", "institution", "cohort", "status", "last_login"]
+    list_display = ["name", "email", "role", "institution", "placement", "status", "last_login"]
     list_filter = ["role", "institution", "must_change_password"]
     search_fields = ["name", "email"]
-    list_select_related = ["institution", "cohort"]
-    readonly_fields = ["status", "last_login", "created_at", "updated_at"]
+    list_select_related = ["institution", *User.PLACEMENT_FIELDS]
+    readonly_fields = ["placement", "status", "last_login", "created_at", "updated_at"]
     actions = ["reset_password", "sign_out_everywhere", "unlock_sign_in"]
 
     def get_fieldsets(self, request, obj=None):
@@ -69,9 +74,19 @@ class UserAdmin(admin.ModelAdmin):
         if obj is None:
             return [(None, {"fields": account + ["temporary_password"]})]
         return [
-            (None, {"fields": account}),
+            (None, {"fields": account + ["placement"]}),
             ("Sign-in", {"fields": ["status", "last_login", "created_at", "updated_at"]}),
         ]
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "cohort":  # options read "Batch · Department · Section · Cohort"
+            kwargs["queryset"] = Cohort.objects.select_related(*ANCESTORS["cohort"])
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    @admin.display(description="Batch · Department · Section · Cohort")
+    def placement(self, obj):
+        placement = obj.placement()
+        return placement["label"] if placement else "—"
 
     @admin.display(description="Status")
     def status(self, obj):

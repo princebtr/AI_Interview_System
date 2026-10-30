@@ -21,14 +21,38 @@ A multi-tenant assessment and AI interview platform for schools and colleges. Ea
 
 ### Scheduled tests
 
-- Educators build **timed multiple-choice tests** from the question bank: title, cohort, start
-  time, duration, number of questions and marks per question
+- Educators build **timed multiple-choice tests** from the question bank: title, who takes it
+  (a whole batch, a department, a section or a single cohort), start time, duration, number
+  of questions and marks per question
 - Students see them under **My tests** (and on their home page) with a countdown; the test
   opens at its start time and closes for everyone when the duration ends
 - One attempt per student, questions shuffled per student, answers **autosaved** as they go,
   resumable after a refresh, and **submitted automatically** when time runs out
 - Graded on the server; correct answers and explanations are revealed only after the test closes
 - Educators follow live results per student (submitted, in progress, not started, missed)
+
+### Notes & messages
+
+- Admins and educators share **messages** (announcements) and **notes** (study material with up to
+  5 files: PDF, Office, images or text, 10 MB each) with a batch, department, section or cohort
+- Every student under that group sees them under **Notes & Messages**, with a badge for new posts
+  and the latest three on their home page
+- Staff see how many students in the audience have opened each post; posts can be pinned, edited
+  (by their author or an admin) and deleted
+- Everyone who can see a post can **react** (👍 ❤️ 🎉 💡 🤔 🙏) and **comment**; staff comments are
+  badged. People delete their own comments; a post's author and admins can delete any comment on it
+  and turn comments off for a post
+
+### Reports
+
+- **Students** open **My Reports**: score trends for practice tests, AI interview answers and
+  scheduled tests, weekly activity, averages by subject, every scheduled test against the average
+  of everyone who took it, and comparisons with their cohort
+- **Admins and educators** open **Reports** for the whole institution or any batch, department,
+  section or cohort: score trends, weekly active students, the spread of students' scores, a
+  breakdown one level down (click to drill in), subjects, recent tests, and a sortable student list
+- Clicking any student (in Reports, My Students or a group page) opens **their** report
+- Every chart has a date range (30 days to 12 months), a hover tooltip and a table view
 
 ### Proctoring in every test
 
@@ -58,9 +82,11 @@ A multi-tenant assessment and AI interview platform for schools and colleges. Ea
 - **Django 5.2** with the **django-mongodb-backend** (MongoDB / Atlas)
 - **JWT** (PyJWT) for authentication, **bcrypt** for password hashing
 - **django-cors-headers** for cross-origin requests
-- `institutions` app: tenants, cohorts, admin tools, branding, audit log
+- `institutions` app: tenants, academic structure (Batch → Department → Section → Cohort), admin tools, branding, audit log
 - `accounts` app: users, login, profile, login throttling
 - `assessments` app: question bank, scheduled tests, sitting and grading
+- `board` app: notes and messages shared with any group of students, with file attachments
+- `reports` app: student and group performance reports (no models; reads practice and test results)
 - `ai` app: Gemini question generation and evaluation, camera checks (YOLO11m, YuNet faces)
 
 ### Frontend (React.js)
@@ -206,43 +232,85 @@ Run `python manage.py onboard_institution --help` for every option. Send the adm
 their sign-in details over a secure channel; they must choose a new password the
 first time they sign in.
 
-### 2. Add users
+### 2. Set up the academic structure
+
+Admins open **Structure** in the sidebar and build a tree of four levels:
+
+**Batch** (e.g. `2023-2027`) → **Department** (`Computer Science`) → **Section** (`A`) → **Cohort** (`Lab group 1`)
+
+Names only need to be unique within their parent, so every batch can have its own
+`Computer Science` department. Each group can be renamed, and deleted once it has no
+sub-groups, students or tests. Click a group for its stats and students.
+
+### 3. Add users
 
 Admins open **Administration → Users** in the sidebar and choose **Add user**:
 
 - Pick a role: **Student**, **Educator** or **Admin**.
-- Students need a **cohort** (e.g. `CSE-2027`). Pick one, or create it on the spot with **New cohort**.
+- Students are placed in a **batch, department, section and cohort** (all four are required).
+  The move icon on a student's row changes their placement later.
 - Set a password or **Generate** one. By default the person must choose their own
   password the first time they sign in.
 - The confirmation screen shows the sign-in details to share (the password isn't shown again).
 
-### 3. Login
+Many people at once: **Users → Import** asks what you want to do.
+
+- **Add new users**: upload a CSV (`name,email,role,password,batch,department,section,cohort`).
+  Blank passwords are generated and offered as a download.
+- **Update existing users**: choose **Export** on the Users page (it exports what the current
+  filters show; passwords are never exported), edit names, roles, placements or passwords, and
+  upload the file. People are matched by email. The review lists every change ("Cohort: Lab 1 →
+  Lab 2") before anything is saved. A blank password keeps theirs; a new password or a new role
+  signs them out. You can't change your own role this way.
+
+### 4. Login
 
 - Navigate to `/login`
 - Enter your email and password
 - On first sign-in, replace the temporary password
 
-### 4. Dashboard and settings
+### 5. Dashboard and settings
 
 - Open **Settings** from your name at the bottom left of the sidebar. Tabs: **Profile** (name,
   email), **Account** (role, institution, sign out here or on all devices), **Password**, and for
   admins **Institution** (logo, name, academic year)
 - Open your role's home: dashboard, teaching workspace or student hub
 
-### 5. AI interview practice
+### 6. AI interview practice
 
 - Navigate to `/interview`
 - Use the camera system for face detection
 - Generate AI questions by entering a subject
 - Submit answers for AI evaluation
 
-### 6. Scheduled tests
+### 7. Adding questions
+
+Educators and admins open **Add Questions**, which offers three ways to fill the question bank:
+
+- **Generate with AI**: describe a subject (and topics), review every draft, edit or regenerate
+  any of them, and save only the ones you approve
+- **Write your own**: a question, four options, the correct answer and an optional explanation.
+  Subject, topic and difficulty stay filled in after saving, so writing a set is quick
+  (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> saves)
+- **Import from a sheet**: upload a CSV exported from Excel or Google Sheets (up to 500
+  questions, 1 MB). Every row is checked first; rows with problems, or questions already in the
+  bank, are skipped. Download the sample from the page, or use
+  [`client/public/sample-questions.csv`](client/public/sample-questions.csv)
+
+CSV columns: `subject, topic, difficulty, question, option_a, option_b, option_c, option_d,
+correct_answer, explanation`. `topic`, `difficulty` (blank = medium) and `explanation` are
+optional; `subject` is optional when you set a default subject on the page. `correct_answer` is
+`A`-`D` or the exact text of the correct option. Short headers such as `Question, A, B, C, D,
+Answer` work too.
+
+### 8. Scheduled tests
 
 Educators (and admins) open **Tests → Create test**:
 
-- Enter a title, pick the **cohort**, the **start time** (or **Start now**) and the **duration**.
+- Enter a title, choose who takes it under **Assign to** (stop at any level: a batch,
+  department, section or cohort; everyone below it gets the test), the **start time** (or **Start now**) and the **duration**.
 - Set the **number of questions** and **marks per question**, then tick questions from the
-  question bank (or **Pick N at random**). Short on questions? Generate more with the AI generator.
+  question bank (or **Pick N at random**). Short on questions? Add more under **Add Questions**.
 - **Schedule test**. The test page shows each student's status and score as they submit.
   A test can be deleted until the first student starts it.
 
@@ -250,7 +318,14 @@ Students open **My tests**: live tests show **Start test**, upcoming ones a coun
 save automatically; use A–D to answer and ←/→ to move. Whatever is answered when time runs
 out is submitted automatically.
 
-### 7. Proctored tests
+### 9. Notes & messages
+
+Admins and educators open **Notes & Messages** and choose **New post**: pick **Message** or
+**Note**, choose who can see it (stop at any level: batch, department, section or cohort), write
+it and attach files if you like. Students find it under **Notes & Messages**; files download with
+their original names.
+
+### 10. Proctored tests
 
 Every scheduled test is proctored. Educators choose which checks run and their limits in the
 **Proctoring** card when creating a test (at least one check must stay on), and can change them
@@ -422,15 +497,17 @@ AI_Interview_System/
 
 ### Institution Admin Routes (JWT required)
 
-- `GET /api/institution/overview` - Dashboard KPIs, 14-day practice activity, cohort performance (admin)
+- `GET /api/institution/overview` - Dashboard KPIs, 14-day practice activity, department performance (admin)
 - `GET /api/institution/activity` - Audit log of administrative actions (admin)
-- `GET /api/institution/users` - List users (admin); filters `role`, `cohort`, `q`, `limit`, `offset`
-- `POST /api/institution/users` - Add a user (admin): `name`, `email`, `role`, `password`, `cohortId` (students), `requirePasswordChange`
-- `POST /api/institution/users/import` - CSV import (admin), multipart `file`; `commit=false` validates every row, `commit=true` imports the valid ones; `createCohorts=true` creates missing cohorts
+- `GET /api/institution/users` - List users (admin); filters `role`, `batch`, `department`, `section`, `cohort`, `q`, `limit`, `offset`
+- `POST /api/institution/users` - Add a user (admin): `name`, `email`, `role`, `password`, `cohortId` (students; batch, department and section follow from it), `requirePasswordChange`
+- `PATCH /api/institution/users/<id>` - Move a student (admin): `cohortId`
+- `POST /api/institution/users/import` - CSV import (admin), multipart `file` with columns `name,email,role,password,batch,department,section,cohort`; `mode=add` (default) creates people, `mode=update` changes existing ones matched by email (rows list their `changes`); `commit=false` validates every row, `commit=true` applies the valid ones; `createGroups=true` creates missing batches, departments, sections and cohorts
+- `GET /api/institution/users/export` - The users as CSV in the import's columns (admin; never includes passwords); filters `role`, `batch`, `department`, `section`, `cohort`, `q`
 - `POST /api/institution/users/<id>/reset-password` - New temporary password, signs the user out everywhere (admin)
-- `GET /api/institution/cohorts` - Cohorts with student, sign-in and practice stats (admin, educator)
-- `POST /api/institution/cohorts` - Create a cohort (admin): `name`
-- `GET /api/institution/cohorts/<id>` - One cohort's stats; `DELETE` removes an empty cohort (admin)
+- `GET /api/institution/structure` - The Batch → Department → Section → Cohort tree, each group with student, sign-in and practice stats (admin, educator)
+- `POST /api/institution/structure` - Add a group (admin): `level` (`batch`, `department`, `section` or `cohort`), `name`, `parentId` (not for batches)
+- `GET /api/institution/structure/<level>/<id>` - One group's stats and sub-groups; `PATCH` renames it (`name`), `DELETE` removes it once it has no sub-groups, students or tests (admin)
 
 ### Institution Profile and Branding
 
@@ -441,25 +518,26 @@ AI_Interview_System/
 
 ### Educator Routes (JWT required; educators and admins)
 
-- `GET /api/teaching/overview` - Question-bank counts, cohort and subject performance
-- `GET /api/teaching/students` - Students with practice stats; filters `cohort`, `q`
+- `GET /api/teaching/overview` - Question-bank counts, section and subject performance
+- `GET /api/teaching/students` - Students with practice stats; filters `batch`, `department`, `section`, `cohort`, `q`
 - `GET /api/questions` - Question bank; filters `subject`, `difficulty`, `mine`, `q`
 - `POST /api/questions` - Save reviewed questions (`{questions: [...]}`, up to 50)
 - `DELETE /api/questions/<id>` - Delete a question (its author or an admin)
+- `POST /api/questions/import` - CSV import of questions (educator, admin), multipart `file`; `commit=false` checks every row, `commit=true` saves the valid ones; optional `subject` fills blank subject cells
 
 ### Scheduled Test Routes (JWT required)
 
 Educators see the tests they created; admins see every test in the institution.
 
 - `GET /api/assessments` - Tests with submission counts and average score (educator, admin)
-- `POST /api/assessments` - Schedule a test (educator, admin): `title`, `cohortId`, `startsAt`
+- `POST /api/assessments` - Schedule a test (educator, admin): `title`, `audience` (`{level, id}` of a batch, department, section or cohort), `startsAt`
   (ISO 8601 with a time zone), `durationMinutes` (5-300), `marksPerQuestion` (1-100),
   `numQuestions`, `questionIds` (from the question bank, 1-100), optional `instructions`,
   `subject`, `shuffleQuestions`. The questions are copied into the test, so later bank edits
   don't change it
 - `GET /api/assessments/<id>` - Questions with answer keys, stats and every student's result;
   `DELETE` removes it until a student starts (its creator or an admin)
-- `GET /api/me/tests` - The student's tests (their cohort only) with their attempt status
+- `GET /api/me/tests` - The student's tests (assigned to their batch, department, section or cohort) with their attempt status
 - `GET /api/me/tests/<id>` - One test as the student may see it now (no answer key until it closes)
 - `POST /api/me/tests/<id>/start` - Start, or resume, the student's single attempt while it's open
 - `PUT /api/me/tests/<id>/answers` - Autosave `{answers: {questionId: "A"-"D"}, review: [questionId]}`
@@ -491,6 +569,26 @@ The API keeps the name `monitoring` for the rules object. Every scheduled test i
   `answers`; reaching a limit grades those answers once and returns `{submitted: true, result}`),
   `POST /api/ai/practice/<quizId>/frame` (same as above). `generate-mcq-questions` returns the
   practice rules as `monitoring`
+
+### Notes & Messages Routes (JWT required)
+
+- `GET /api/board/posts` - Posts the caller can see (students: their groups'; staff: the institution's), pinned first then newest; filters `kind` (`message`/`note`), `q`, `limit`, `offset`, and for staff `batch`, `department`, `section`, `cohort`, `mine=true`. Students get `read`; staff get `canEdit`, `readers` and `audienceSize`
+- `POST /api/board/posts` - Share a post (admin, educator), multipart: `kind`, `title`, `body`, `pinned`, `commentsEnabled`, `audienceLevel`, `audienceId`, up to 5 `files`
+- `GET /api/board/posts/<id>` - One post; `PATCH` (`title`, `body`, `pinned`, `commentsEnabled`, `audience: {level, id}`) and `DELETE` for its author or an admin
+- `GET /api/board/posts/<id>/comments` - The post's comments, oldest first (`offset`, `limit`); `POST` `{body}` adds one (anyone who can see the post, unless its comments are off)
+- `DELETE /api/board/posts/<id>/comments/<commentId>` - Delete a comment (its author, the post's author, or an admin)
+- `PUT /api/board/posts/<id>/reactions/<kind>` - React (`like`, `love`, `celebrate`, `insightful`, `curious`, `thanks`); `DELETE` removes it. Both return the post's `reactions`
+- `POST /api/board/posts/<id>/read` - Student: mark as read
+- `GET /api/board/unread` - Student: number of unread posts
+- `POST /api/board/posts/<id>/attachments` - Add files (multipart `files`); `GET /api/board/posts/<id>/attachments/<fileId>` downloads one, `DELETE` removes it
+
+### Reports Routes (JWT required)
+
+All take `days` = `30`, `90` (default), `180` or `365`.
+
+- `GET /api/reports/me` - Student: their own report (summary with cohort comparison, weekly `trend`, `subjects`, scheduled `tests` with the average of everyone who took each, `recent` practice)
+- `GET /api/reports/students/<id>` - Admin, educator: the same report for one student
+- `GET /api/reports/overview` - Admin, educator: the institution, or one group with `batch`, `department`, `section` or `cohort` (summary, weekly `trend` incl. active students, score `distribution`, `groups` one level down, `subjects`, recent `tests`, per-student `students`)
 
 ### Student Routes (JWT required)
 

@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 
 from ai import detection
+from institutions.models import Audience
 
 
 class Question(models.Model):
@@ -55,8 +56,9 @@ class Question(models.Model):
         }
 
 
-class Assessment(models.Model):
-    """A scheduled multiple-choice test assigned to one cohort.
+class Assessment(Audience):
+    """A scheduled multiple-choice test assigned to one group of students: a
+    batch, department, section or cohort, and so everyone beneath it.
 
     The test opens at `starts_at` and closes for everyone `duration_minutes`
     later, like an exam sitting. `questions` is a snapshot taken when the test
@@ -68,9 +70,6 @@ class Assessment(models.Model):
     )
     created_by = models.ForeignKey(
         "accounts.User", null=True, on_delete=models.SET_NULL, related_name="assessments"
-    )
-    cohort = models.ForeignKey(
-        "institutions.Cohort", on_delete=models.PROTECT, related_name="assessments"
     )
     title = models.CharField(max_length=200)
     subject = models.CharField(max_length=200, blank=True)
@@ -124,7 +123,7 @@ class Assessment(models.Model):
             "title": self.title,
             "subject": self.subject,
             "instructions": self.instructions,
-            "cohort": self.cohort.to_dict(),
+            "audience": self.audience_dict(),
             "startsAt": self.starts_at,
             "endsAt": self.ends_at,
             "durationMinutes": self.duration_minutes,

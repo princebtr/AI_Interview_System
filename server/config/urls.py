@@ -24,5 +24,7 @@ urlpatterns = [
     path("api/institutions/by-slug/<slug:slug>", institution_views.branding),
     path("api/institutions/<str:institution_id>/logo", institution_views.logo),
     path("api/me/performance", my_performance),
+    path("api/board/", include("board.urls")),
+    path("api/reports/", include("reports.urls")),
     path("api/", include("assessments.urls")),
 ]

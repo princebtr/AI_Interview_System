@@ -38,7 +38,7 @@ def login(request):
         return too_many_attempts(wait)
 
     user = (
-        User.objects.select_related("institution", "cohort")
+        User.objects.select_related("institution", *User.PLACEMENT_FIELDS)
         .defer("institution__logo")
         .filter(email=email)
         .first()

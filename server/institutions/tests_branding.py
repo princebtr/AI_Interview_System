@@ -69,6 +69,9 @@ class DjangoAdminTests(ApiTestCase):
             "is_active": "on",
             "primary_color": "#4f46e5",
             "secondary_color": "#7c3aed",
+            # Management form of the (empty) batches inline on the change page.
+            "batches-TOTAL_FORMS": "0",
+            "batches-INITIAL_FORMS": "0",
         }
         data.update(changes)
         return {k: v for k, v in data.items() if v is not None}

@@ -1,0 +1,7 @@
+subject,topic,difficulty,question,option_a,option_b,option_c,option_d,correct_answer,explanation
+Data Structures,Stacks,easy,Which data structure follows Last In First Out (LIFO)?,Queue,Stack,Linked list,Tree,B,"A stack removes the most recently added item first, so the last item in is the first out."
+Data Structures,Arrays,medium,What is the time complexity of accessing an element of an array by its index?,O(1),O(log n),O(n),O(n log n),A,Arrays store elements in contiguous memory so any index is computed directly.
+Data Structures,Trees,hard,"In a binary search tree, which traversal visits the keys in sorted order?",Pre-order,Post-order,In-order,Level-order,C,"In-order visits the left subtree, then the node, then the right subtree."
+Java,OOP,easy,Which keyword is used to inherit a class in Java?,implements,extends,inherits,super,B,
+DBMS,Normalisation,medium,Which normal form removes partial dependencies on a composite key?,1NF,2NF,3NF,BCNF,2NF,You can also write the exact text of the correct option instead of its letter.
+Operating Systems,Scheduling,,Which CPU scheduling algorithm can cause starvation of long processes?,Round Robin,First Come First Served,Shortest Job First,None of these,C,Leave difficulty blank and it defaults to medium.

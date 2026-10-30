@@ -51,7 +51,7 @@ const SettingsLayout = () => {
   const { user } = useAuth();
   const role = roleMeta(user?.role);
   const tabs = TABS.filter((tab) => !tab.roles || tab.roles.includes(user?.role));
-  const place = [user?.institution?.name, user?.cohort?.name].filter(Boolean).join(" · ");
+  const place = [user?.institution?.name, user?.placement?.label].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-6">

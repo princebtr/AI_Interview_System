@@ -35,6 +35,8 @@ INSTALLED_APPS = [
     "accounts.apps.AccountsConfig",
     "ai.apps.AiConfig",
     "assessments.apps.AssessmentsConfig",
+    "board.apps.BoardConfig",
+    "reports.apps.ReportsConfig",
 ]
 
 STATIC_URL = 'static/'

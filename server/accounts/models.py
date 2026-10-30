@@ -28,7 +28,18 @@ class User(models.Model):
         on_delete=models.PROTECT,
         related_name="users",
     )
-    # Students belong to one cohort of their institution; staff have none.
+    # Students sit in one cohort of their institution and also store its
+    # ancestors, so they can be found by batch, department, section or cohort
+    # with one indexed match. Always set together through place(); staff have none.
+    batch = models.ForeignKey(
+        "institutions.Batch", null=True, blank=True, on_delete=models.PROTECT, related_name="students"
+    )
+    department = models.ForeignKey(
+        "institutions.Department", null=True, blank=True, on_delete=models.PROTECT, related_name="students"
+    )
+    section = models.ForeignKey(
+        "institutions.Section", null=True, blank=True, on_delete=models.PROTECT, related_name="students"
+    )
     cohort = models.ForeignKey(
         "institutions.Cohort",
         null=True,
@@ -85,6 +96,30 @@ class User(models.Model):
         self.last_login = timezone.now()
         self.save(update_fields=["last_login", "updated_at"])
 
+    # --- placement in Batch -> Department -> Section -> Cohort --------------
+    # select_related() these to serialise users without extra queries.
+    PLACEMENT_FIELDS = ("batch", "department", "section", "cohort")
+
+    def place(self, cohort):
+        """Put the user in `cohort` (or nowhere, for None), filling in its
+        section, department and batch. Doesn't save."""
+        section = cohort.section if cohort else None
+        department = section.department if section else None
+        self.batch = department.batch if department else None
+        self.department = department
+        self.section = section
+        self.cohort = cohort
+
+    def placement(self):
+        """{batch, department, section, cohort, label} or None when unplaced."""
+        if not self.cohort_id:
+            return None
+        nodes = {field: getattr(self, field) for field in self.PLACEMENT_FIELDS}
+        return {
+            **{field: node.to_dict() if node else None for field, node in nodes.items()},
+            "label": " · ".join(node.name for node in nodes.values() if node),
+        }
+
     # --- serialisation (camelCase to match the React client) -------------
     def to_dict(self):
         return {
@@ -94,6 +129,7 @@ class User(models.Model):
             "role": self.role,
             "institution": self.institution.to_dict() if self.institution_id else None,
             "cohort": self.cohort.to_dict() if self.cohort_id else None,
+            "placement": self.placement(),
             "mustChangePassword": self.must_change_password,
             "isEmailVerified": self.is_email_verified,
             "lastLogin": self.last_login,

@@ -19,12 +19,16 @@ class ReadOnlyAdmin(admin.ModelAdmin):
 
 @admin.register(Assessment)
 class AssessmentAdmin(ReadOnlyAdmin):
-    list_display = ["title", "institution", "cohort", "starts_at", "duration_minutes", "created_by"]
+    list_display = ["title", "institution", "audience_label", "starts_at", "duration_minutes", "created_by"]
     list_filter = ["institution"]
     search_fields = ["title", "subject"]
     date_hierarchy = "starts_at"
-    list_select_related = ["institution", "cohort", "created_by"]
+    list_select_related = ["institution", *Assessment.AUDIENCE_FIELDS, "created_by"]
     exclude = ["questions"]
+
+    @admin.display(description="Assigned to")
+    def audience_label(self, obj):
+        return obj.audience_dict()["label"]
 
 
 @admin.register(AssessmentAttempt)

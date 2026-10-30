@@ -9,12 +9,12 @@ import {
   TrashIcon,
 } from "@heroicons/react/20/solid";
 import { SparklesIcon } from "@heroicons/react/24/outline";
-import api from "../../utils/axios";
-import { Button, Card, CardFooter, CardHeader, ChoiceChips, Input, PageHeader, Textarea } from "../../components/ui";
-import { inputStyles } from "../../components/styles";
-import { OptionList } from "../../components/questions";
-import { apiError, cx } from "../../utils/helpers";
-import { DIFFICULTIES, LETTERS } from "../../utils/questions";
+import api from "../../../utils/axios";
+import { Button, Card, CardFooter, CardHeader, ChoiceChips, Input, Textarea } from "../../../components/ui";
+import { inputStyles } from "../../../components/styles";
+import { OptionList, Segmented } from "../../../components/questions";
+import { apiError, cx } from "../../../utils/helpers";
+import { DIFFICULTIES, LETTERS } from "../../../utils/questions";
 
 const COUNTS = [5, 10, 15, 20];
 const SUGGESTED = ["Data structures", "Java", "Python", "DBMS", "Operating systems", "Computer networks"];
@@ -37,30 +37,6 @@ const draftProblem = (d) => {
   if (!LETTERS.includes(d.correctAnswer)) return "Choose the correct answer.";
   return null;
 };
-
-const Segmented = ({ label, options, value, onChange }) => (
-  <fieldset>
-    <legend className="mb-1.5 text-sm font-medium text-slate-800">{label}</legend>
-    <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          aria-pressed={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={cx(
-            "h-8 min-w-12 rounded px-3 text-sm font-medium tabular-nums transition-colors",
-            value === o.value
-              ? "bg-white text-slate-900 shadow-xs ring-1 ring-slate-200"
-              : "text-slate-500 hover:text-slate-800"
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  </fieldset>
-);
 
 const DraftEditor = ({ draft, onChange, onDone }) => {
   const problem = draftProblem(draft);
@@ -117,7 +93,8 @@ const DraftEditor = ({ draft, onChange, onDone }) => {
   );
 };
 
-const Generator = () => {
+/** "Generate with AI": describe a topic, review every draft, save the approved ones. */
+const AiGenerator = () => {
   const navigate = useNavigate();
   const [subject, setSubject] = useState("");
   const [topics, setTopics] = useState("");
@@ -214,12 +191,6 @@ const Generator = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Teaching"
-        title="AI question generator"
-        description="Generate multiple-choice questions, review every one, then save the approved set to your question bank."
-      />
-
       {!settings ? (
         <Card className="max-w-3xl">
           <CardHeader title="What should the questions cover?" />
@@ -389,4 +360,4 @@ const Generator = () => {
   );
 };
 
-export default Generator;
+export default AiGenerator;

@@ -74,6 +74,18 @@ def finalize_if_expired(attempt, now=None):
     return attempt
 
 
+def finalize_closed(assessments):
+    """Submit attempts left open on tests that have closed."""
+    now = timezone.now()
+    closed = [a.pk for a in assessments if a.ends_at <= now]
+    if not closed:
+        return
+    for attempt in AssessmentAttempt.objects.filter(assessment_id__in=closed, submitted_at=None).select_related(
+        "assessment"
+    ):
+        finalize_if_expired(attempt, now)
+
+
 def start(assessment, student):
     """The student's attempt, created on first start. Only while the test is open."""
     existing = AssessmentAttempt.objects.filter(assessment=assessment, student=student).first()

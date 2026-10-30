@@ -27,7 +27,7 @@ from accounts.auth import create_token
 from accounts.models import LoginAttempt, User
 from accounts.throttle import throttle_key
 from ai.models import InterviewSession
-from institutions.models import Cohort, Institution
+from institutions.models import Batch, Cohort, Department, Institution, Section
 
 # Captured at import time, before any override, so a test can compare against
 # the cost factor that production really uses.
@@ -43,7 +43,7 @@ LOGOUT = "/api/auth/logout"
 UPDATE_DETAILS = "/api/auth/updatedetails"
 UPDATE_PASSWORD = "/api/auth/updatepassword"
 USERS = "/api/institution/users"
-COHORTS = "/api/institution/cohorts"
+STRUCTURE = "/api/institution/structure"
 AI_SESSION = "/api/ai/session"
 
 
@@ -64,9 +64,29 @@ def make_institution(name=None, **fields):
     return Institution.objects.create(name=name or f"Institution {suffix}", **fields)
 
 
-def make_cohort(institution, name=None):
+def make_batch(institution, name=None):
+    return Batch.objects.create(institution=institution, name=name or f"Batch {uuid.uuid4().hex[:8]}")
+
+
+def make_department(batch, name=None):
+    return Department.objects.create(
+        institution_id=batch.institution_id, batch=batch, name=name or f"Department {uuid.uuid4().hex[:8]}"
+    )
+
+
+def make_section(department, name=None):
+    return Section.objects.create(
+        institution_id=department.institution_id,
+        department=department,
+        name=name or f"Section {uuid.uuid4().hex[:8]}",
+    )
+
+
+def make_cohort(institution, name=None, section=None):
+    """A cohort; unless `section` is given, under a new batch, department and section."""
+    section = section or make_section(make_department(make_batch(institution)))
     return Cohort.objects.create(
-        institution=institution, name=name or f"Cohort {uuid.uuid4().hex[:8]}"
+        institution=institution, section=section, name=name or f"Cohort {uuid.uuid4().hex[:8]}"
     )
 
 
@@ -75,11 +95,11 @@ def make_user(institution, role="student", *, password=PASSWORD, email=None, nam
     user = User(
         institution=institution,
         role=role,
-        cohort=cohort,
         email=email or unique_email(role),
         name=name or f"Test {role.title()}",
         **fields,
     )
+    user.place(cohort)
     user.set_password(password)
     user.save()
     return user
@@ -134,6 +154,12 @@ class ApiTestCase(TestCase):
 
     def api_put(self, path, body=None, **kwargs):
         return self.request("PUT", path, body, **kwargs)
+
+    def api_patch(self, path, body=None, **kwargs):
+        return self.request("PATCH", path, body, **kwargs)
+
+    def api_delete(self, path, **kwargs):
+        return self.request("DELETE", path, raw="", **kwargs)
 
     def api_login(self, email, password):
         return self.api_post(LOGIN, {"email": email, "password": password})
@@ -221,6 +247,18 @@ class LoginTests(ApiTestCase):
             },
         )
         self.assertEqual(user["cohort"], {"id": str(self.cohort.pk), "name": "CSE 2027"})
+        section = self.cohort.section
+        department, batch = section.department, section.department.batch
+        self.assertEqual(
+            user["placement"],
+            {
+                "batch": {"id": str(batch.pk), "name": batch.name},
+                "department": {"id": str(department.pk), "name": department.name},
+                "section": {"id": str(section.pk), "name": section.name},
+                "cohort": {"id": str(self.cohort.pk), "name": "CSE 2027"},
+                "label": f"{batch.name} · {department.name} · {section.name} · CSE 2027",
+            },
+        )
         self.assertIsNotNone(user["lastLogin"])
         self.assertNotIn("password", user)
         self.assertNotIn(self.user.password, response.content.decode())
@@ -459,7 +497,7 @@ class TokenAuthenticationTests(ApiTestCase):
         Institution.objects.filter(pk=self.institution.pk).update(is_active=False)
         self.assertStatus(self.api_get(ME, token=token), 401)
         self.assertStatus(self.api_put(UPDATE_DETAILS, {"name": "Renamed"}, token=token), 401)
-        self.assertStatus(self.api_get(COHORTS, token=token), 401)
+        self.assertStatus(self.api_get(STRUCTURE, token=token), 401)
         self.user.refresh_from_db()
         self.assertNotEqual(self.user.name, "Renamed")
 
@@ -554,8 +592,8 @@ class TemporaryPasswordTests(ApiTestCase):
             ("PUT", UPDATE_DETAILS, {"name": "Changed Name"}),
             ("GET", USERS, None),
             ("POST", USERS, new_user),
-            ("GET", COHORTS, None),
-            ("POST", COHORTS, {"name": "CSE 2027"}),
+            ("GET", STRUCTURE, None),
+            ("POST", STRUCTURE, {"level": "batch", "name": "2027"}),
             ("POST", AI_SESSION, None),
         ]
         for method, path, body in calls:
@@ -565,7 +603,7 @@ class TemporaryPasswordTests(ApiTestCase):
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.name, "Pending Admin")
         self.assertEqual(User.objects.count(), 1)
-        self.assertFalse(Cohort.objects.exists())
+        self.assertFalse(Batch.objects.exists())
         self.assertFalse(InterviewSession.objects.exists())
 
     def test_wrong_current_password_is_400_not_401(self):
@@ -619,7 +657,7 @@ class TemporaryPasswordTests(ApiTestCase):
 
         # The new token reaches the endpoints that were blocked.
         self.assertStatus(self.api_get(USERS, token=new_token), 200)
-        self.assertStatus(self.api_get(COHORTS, token=new_token), 200)
+        self.assertStatus(self.api_get(STRUCTURE, token=new_token), 200)
         created = self.api_post(
             USERS,
             {"name": "New Educator", "email": unique_email("edu"), "role": "educator",
@@ -743,6 +781,8 @@ class UpdateDetailsTests(ApiTestCase):
                 "institutionId": str(other.pk),
                 "cohort": str(other_cohort.pk),
                 "cohortId": str(other_cohort.pk),
+                "batch": str(other_cohort.section.department.batch_id),
+                "section": str(other_cohort.section_id),
                 "mustChangePassword": True,
                 "isEmailVerified": True,
             }
@@ -753,6 +793,8 @@ class UpdateDetailsTests(ApiTestCase):
         self.assertEqual(self.user.role, "student")
         self.assertEqual(self.user.institution_id, self.institution.pk)
         self.assertEqual(self.user.cohort_id, self.cohort.pk)
+        self.assertEqual(self.user.section_id, self.cohort.section_id)
+        self.assertEqual(self.user.batch_id, self.cohort.section.department.batch_id)
         self.assertFalse(self.user.must_change_password)
         self.assertFalse(self.user.is_email_verified)
 

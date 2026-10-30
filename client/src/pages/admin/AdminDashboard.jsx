@@ -32,8 +32,12 @@ import { firstName, greeting, timeAgo, todayLabel } from "../../utils/time";
 const ACTIVITY_ICONS = {
   "user.created": UserPlusIcon,
   "users.imported": ArrowUpTrayIcon,
-  "cohort.created": UserGroupIcon,
-  "cohort.deleted": UserGroupIcon,
+  ...Object.fromEntries(
+    ["batch", "department", "section", "cohort"].flatMap((level) =>
+      ["created", "renamed", "deleted"].map((what) => [`${level}.${what}`, UserGroupIcon])
+    )
+  ),
+  "user.moved": UserGroupIcon,
   "institution.onboarded": BuildingLibraryIcon,
   "user.password_reset": KeyIcon,
   "institution.updated": BuildingLibraryIcon,
@@ -43,16 +47,16 @@ const ACTIVITY_ICONS = {
   "assessment.deleted": ClipboardDocumentListIcon,
 };
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 const SetupChecklist = ({ counts, institution }) => {
   const steps = [
     {
       done: counts.cohorts > 0,
-      title: "Create your first cohort",
-      detail: "Cohorts group students who study together, e.g. CSE-2027.",
-      to: "/cohorts?new=1",
-      action: "Create cohort",
+      title: "Set up your academic structure",
+      detail: "Batch → Department → Section → Cohort, e.g. 2023-2027 → Computer Science → A → Lab group 1.",
+      to: "/structure",
+      action: "Set up structure",
     },
     {
       done: counts.educators > 0,
@@ -123,7 +127,7 @@ const ActivityFeed = ({ items }) => {
     return (
       <EmptyState
         title="No activity yet"
-        description="Users you add, cohorts you create and imports will show up here."
+        description="Users you add, groups you create and imports will show up here."
       />
     );
   }
@@ -220,11 +224,11 @@ const AdminDashboard = () => {
               to="/users?role=educator"
             />
             <StatCard
-              label="Cohorts"
-              value={counts.cohorts}
-              sub="Groups of students"
+              label="Departments"
+              value={counts.departments}
+              sub={`${plural(counts.batches, "batch", "batches")} · ${plural(counts.sections, "section")} · ${plural(counts.cohorts, "cohort")}`}
               icon={UserGroupIcon}
-              to="/cohorts"
+              to="/structure"
             />
             <StatCard
               label="Practice sessions"
@@ -289,40 +293,38 @@ const AdminDashboard = () => {
 
       <Card>
         <CardHeader
-          title="Cohorts"
-          description="Students, sign-ins and average practice score per cohort"
-          action={<CardLink to="/cohorts">All cohorts</CardLink>}
+          title="Departments"
+          description="Students, sign-ins and average practice score per department"
+          action={<CardLink to="/structure">Academic structure</CardLink>}
         />
         {!data ? (
           <div className="p-5">
             <LoadingBlock className="h-32" />
           </div>
-        ) : data.cohorts.length === 0 ? (
+        ) : data.departments.length === 0 ? (
           <EmptyState
             icon={UserGroupIcon}
-            title="No cohorts yet"
-            description="Create a cohort before adding students."
-            action={
-              <Button onClick={() => navigate("/cohorts?new=1")}>Create cohort</Button>
-            }
+            title="No departments yet"
+            description="Set up batches, departments, sections and cohorts before adding students."
+            action={<Button onClick={() => navigate("/structure")}>Set up structure</Button>}
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[12px] text-slate-500">
-                  <th className="px-5 py-2.5 font-medium">Cohort</th>
+                  <th className="px-5 py-2.5 font-medium">Department</th>
                   <th className="px-5 py-2.5 text-right font-medium">Students</th>
                   <th className="hidden px-5 py-2.5 text-right font-medium sm:table-cell">Signed in</th>
                   <th className="px-5 py-2.5 font-medium">Avg practice score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.cohorts.map((c) => (
+                {data.departments.map((c) => (
                   <tr key={c.id} className="transition-colors hover:bg-slate-50">
                     <td className="px-5 py-3">
-                      <Link to={`/cohorts/${c.id}`} className="font-medium text-slate-900 hover:text-accent-700">
-                        {c.name}
+                      <Link to={`/structure/department/${c.id}`} className="font-medium text-slate-900 hover:text-accent-700">
+                        {c.label}
                       </Link>
                     </td>
                     <td className="px-5 py-3 text-right text-slate-700 tabular-nums">{c.students}</td>

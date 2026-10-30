@@ -260,7 +260,7 @@ class Command(BaseCommand):
         admin = self.existing_admin or User(email=admin_email)
         admin.name = admin_name
         admin.role = "admin"
-        admin.cohort = None
+        admin.place(None)
         admin.must_change_password = True
         admin.set_password(password)
         if self.existing_admin:

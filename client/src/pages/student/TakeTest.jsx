@@ -617,7 +617,7 @@ const TakeTest = () => {
         <PageHeader eyebrow="My tests" title={missing ? "Test not found" : "Test"} />
         {missing ? (
           <Card className="p-6 text-center text-sm text-slate-600">
-            This test isn't assigned to your cohort.{" "}
+            This test isn't assigned to you.{" "}
             <Link to="/tests" className="font-medium text-accent-700">
               Back to my tests
             </Link>
@@ -637,7 +637,7 @@ const TakeTest = () => {
         <Breadcrumb title={data.title} />
         <PageHeader
           title={data.title}
-          description={`${data.cohort.name} · ${formatDateTime(data.startsAt)} · ${data.questionCount} questions`}
+          description={`${data.audience.label} · ${formatDateTime(data.startsAt)} · ${data.questionCount} questions`}
         />
         <Result test={data} attempt={attempt} />
       </div>
@@ -657,7 +657,7 @@ const TakeTest = () => {
         <Breadcrumb title={data.title} />
         <PageHeader
           title={data.title}
-          description={data.subject || data.cohort.name}
+          description={data.subject || data.audience.label}
           actions={<TestStatusBadge status={status} />}
         />
         <Card>

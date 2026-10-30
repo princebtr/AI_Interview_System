@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { TrashIcon } from "@heroicons/react/20/solid";
+import { PlusIcon, TrashIcon } from "@heroicons/react/20/solid";
 import { RectangleStackIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
@@ -66,9 +66,9 @@ const QuestionBank = () => {
         title="Question bank"
         description="Reviewed, reusable questions for your institution. Everything here was checked by an educator before it was saved."
         actions={
-          <Button onClick={() => navigate("/generator")}>
-            <SparklesIcon className="size-4" />
-            Generate with AI
+          <Button onClick={() => navigate("/questions/add")}>
+            <PlusIcon className="size-4" />
+            Add questions
           </Button>
         }
       />
@@ -149,13 +149,13 @@ const QuestionBank = () => {
             description={
               filtered
                 ? "Try a different subject, difficulty or search."
-                : "Generate questions with AI, review them, and save the ones you approve."
+                : "Generate questions with AI, write your own, or import a sheet of them."
             }
             action={
               !filtered && (
-                <Button onClick={() => navigate("/generator")}>
-                  <SparklesIcon className="size-4" />
-                  Generate with AI
+                <Button onClick={() => navigate("/questions/add")}>
+                  <PlusIcon className="size-4" />
+                  Add questions
                 </Button>
               )
             }

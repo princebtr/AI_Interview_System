@@ -1,4 +1,4 @@
-// Shared display pieces for multiple-choice questions (question bank, AI generator).
+// Shared pieces for multiple-choice questions (question bank, adding questions).
 import { CheckIcon } from "@heroicons/react/20/solid";
 import { SparklesIcon } from "@heroicons/react/24/outline";
 import { Badge } from "./ui";
@@ -47,4 +47,29 @@ export const OptionList = ({ options, correct, compact = false }) => (
       );
     })}
   </ul>
+);
+
+/** A small segmented control, e.g. difficulty or question count. */
+export const Segmented = ({ label, options, value, onChange }) => (
+  <fieldset>
+    <legend className="mb-1.5 text-sm font-medium text-slate-800">{label}</legend>
+    <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cx(
+            "h-8 min-w-12 rounded px-3 text-sm font-medium tabular-nums transition-colors",
+            value === o.value
+              ? "bg-white text-slate-900 shadow-xs ring-1 ring-slate-200"
+              : "text-slate-500 hover:text-slate-800"
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  </fieldset>
 );

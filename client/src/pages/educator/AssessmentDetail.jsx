@@ -164,7 +164,7 @@ const AssessmentDetail = () => {
   };
 
   const remove = async () => {
-    if (!window.confirm(`Delete "${test.title}"? Students in ${test.cohort.name} will no longer see it.`)) return;
+    if (!window.confirm(`Delete "${test.title}"? Students in ${test.audience.label} will no longer see it.`)) return;
     setDeleting(true);
     try {
       await api.delete(`/assessments/${id}`);
@@ -188,7 +188,7 @@ const AssessmentDetail = () => {
         title={test?.title ?? "Test"}
         description={
           test &&
-          `${test.cohort.name} · ${formatDateTime(test.startsAt)} to ${formatClockTime(test.endsAt)} (${formatDuration(test.durationMinutes)}) · ${test.questionCount} questions × ${test.marksPerQuestion} marks = ${test.totalMarks}`
+          `${test.audience.label} · ${formatDateTime(test.startsAt)} to ${formatClockTime(test.endsAt)} (${formatDuration(test.durationMinutes)}) · ${test.questionCount} questions × ${test.marksPerQuestion} marks = ${test.totalMarks}`
         }
         actions={
           test && (
@@ -223,7 +223,7 @@ const AssessmentDetail = () => {
 
       {stats ? (
         <StatGrid>
-          <StatCard label="Students" value={stats.students} sub={test.cohort.name} icon={AcademicCapIcon} />
+          <StatCard label="Students" value={stats.students} sub={test.audience.label} icon={AcademicCapIcon} />
           <StatCard label="Submitted" value={`${stats.submitted} / ${stats.students}`} sub={stats.inProgress ? `${stats.inProgress} in progress` : "Finished or auto-submitted"} icon={CheckBadgeIcon} />
           <StatCard label="Average" value={formatPercent(stats.averagePercentage)} sub="Of submitted tests" icon={ChartBarIcon} />
           <StatCard
@@ -240,7 +240,7 @@ const AssessmentDetail = () => {
       )}
 
       <Card>
-        <CardHeader title="Results" description={test?.status === "scheduled" ? "Results appear here once students start." : "Every student in the cohort"} />
+        <CardHeader title="Results" description={test?.status === "scheduled" ? "Results appear here once students start." : "Every student the test is assigned to"} />
         {!data ? (
           <div className="p-5"><LoadingBlock className="h-32" /></div>
         ) : (
@@ -257,7 +257,7 @@ const AssessmentDetail = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.results.length === 0 ? (
-                  <tr><td colSpan={monitored ? 5 : 4} className="px-5 py-8 text-center text-[13px] text-slate-500">No students in this cohort yet.</td></tr>
+                  <tr><td colSpan={monitored ? 5 : 4} className="px-5 py-8 text-center text-[13px] text-slate-500">No students in this group yet.</td></tr>
                 ) : (
                   data.results.map((r) => (
                     <tr key={r.student.id}>

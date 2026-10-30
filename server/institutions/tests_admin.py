@@ -5,8 +5,8 @@ import re
 from django.contrib.auth import get_user_model
 
 from accounts.models import User
-from accounts.tests import ApiTestCase, make_institution, make_user
-from institutions.models import AuditLog, Cohort, Institution
+from accounts.tests import ApiTestCase, make_batch, make_cohort, make_institution, make_user
+from institutions.models import AuditLog, Institution
 
 ADD = "/admin/institutions/institution/add/"
 
@@ -60,13 +60,13 @@ class OnboardingTests(ApiTestCase):
         self.assertContains(response, "already exists")
         self.assertFalse(Institution.objects.filter(slug="hillview").exists())
 
-    def test_change_page_lists_people_and_cohorts(self):
+    def test_change_page_lists_people_and_batches(self):
         institution = make_institution(name="Greenfield")
         make_user(institution, "admin")
-        Cohort.objects.create(institution=institution, name="CSE-2027")
+        make_batch(institution, "Batch 2023-2027")
         response = self.client.get(f"/admin/institutions/institution/{institution.pk}/change/")
         self.assertContains(response, "1 admins")
-        self.assertContains(response, "CSE-2027")
+        self.assertContains(response, "Batch 2023-2027")
 
 
 class UserAdminTests(ApiTestCase):
@@ -74,10 +74,10 @@ class UserAdminTests(ApiTestCase):
         self.staff = get_user_model().objects.create_superuser("platform", "platform@example.com", "Platform-2026x")
         self.client.force_login(self.staff)
         self.institution = make_institution(name="Greenfield")
-        self.cohort = Cohort.objects.create(institution=self.institution, name="CSE-2027")
+        self.cohort = make_cohort(self.institution, "CSE-2027")
 
     def test_add_student_needs_a_cohort_of_the_same_institution(self):
-        other = Cohort.objects.create(institution=make_institution(name="Other"), name="X")
+        other = make_cohort(make_institution(name="Other"), "X")
         data = {"name": "Ravi Kumar", "email": "ravi@greenfield.edu", "role": "student", "institution": self.institution.pk, "cohort": other.pk}
         response = self.client.post("/admin/accounts/user/add/", data)
         self.assertContains(response, "another institution")
@@ -87,6 +87,12 @@ class UserAdminTests(ApiTestCase):
         password = re.search(r"<code>([^<]+)</code>", response.content.decode()).group(1)
         self.assertTrue(user.check_password(password))
         self.assertTrue(user.must_change_password)
+        # The cohort's section, department and batch are filled in too.
+        section = self.cohort.section
+        self.assertEqual(
+            (user.batch_id, user.department_id, user.section_id, user.cohort_id),
+            (section.department.batch_id, section.department_id, section.pk, self.cohort.pk),
+        )
 
     def test_reset_password_action(self):
         user = make_user(self.institution, "educator")

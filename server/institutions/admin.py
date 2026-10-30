@@ -1,6 +1,7 @@
 """Django admin (/admin) for platform staff: onboarding institutions with their
 first admin, each institution's logo and theme colours (used by every portal and
-its sign-in page), cohorts, and the audit trail."""
+its sign-in page), batches, and the audit trail. Departments, sections and
+cohorts are managed by each institution's admins in the app."""
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
@@ -14,7 +15,7 @@ from config.http import BadRequest
 
 from .branding import process_logo
 from .management.commands.onboard_institution import default_academic_year
-from .models import AuditLog, Cohort, Institution
+from .models import AuditLog, Batch, Institution
 from .theme import palette
 
 DEFAULT_PRIMARY, DEFAULT_SECONDARY = "#4f46e5", "#7c3aed"  # Cohortix indigo -> violet
@@ -132,8 +133,8 @@ class OnboardInstitutionForm(InstitutionAdminForm):
         return password
 
 
-class CohortInline(admin.TabularInline):
-    model = Cohort
+class BatchInline(admin.TabularInline):
+    model = Batch
     fields = ["name", "student_count", "created_at"]
     readonly_fields = ["student_count", "created_at"]
     extra = 0
@@ -151,7 +152,7 @@ class InstitutionAdmin(admin.ModelAdmin):
     search_fields = ["name", "slug"]
     readonly_fields = ["logo_preview", "theme_preview", "people", "admin_accounts", "sign_in_link", "created_at", "updated_at"]
     prepopulated_fields = {"slug": ["name"]}
-    inlines = [CohortInline]
+    inlines = [BatchInline]
     actions = ["activate", "deactivate"]
     onboarding_fieldsets = [
         (None, {"fields": ["name", "slug", "type", "is_active"]}),

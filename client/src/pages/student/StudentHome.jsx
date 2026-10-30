@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   CalendarDaysIcon,
   ChartBarIcon,
+  ChatBubbleLeftRightIcon,
   ClipboardDocumentCheckIcon,
   FireIcon,
   MicrophoneIcon,
@@ -17,6 +18,7 @@ import { PracticeTopicLinks, StudentTestCard } from "../../components/tests";
 import { cx } from "../../utils/helpers";
 import { formatPercent } from "../../utils/scores";
 import { firstName, timeAgo, todayLabel } from "../../utils/time";
+import { KIND_META } from "../../utils/board";
 
 const KIND_LABEL = { mcq: "Practice test", interview: "AI interview answer" };
 
@@ -46,6 +48,40 @@ const PracticeCard = ({ icon: Icon, tone = "primary", title, description, meta, 
 );
 
 // Its own component so the once-a-second clock only re-renders the test cards.
+/** The three latest notes and messages shared with the student. Hidden until there is one. */
+const LatestPosts = () => {
+  const { data } = useApi("/board/posts", { limit: 3 });
+  const posts = data?.posts ?? [];
+  if (posts.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader
+        title="From your educators"
+        description="Latest notes and messages"
+        action={<CardLink to="/board">All notes & messages</CardLink>}
+      />
+      <ul className="divide-y divide-slate-100">
+        {posts.map((post) => (
+          <li key={post.id}>
+            <Link to="/board" className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-slate-50">
+              <ChatBubbleLeftRightIcon className="size-5 shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-slate-900">{post.title}</span>
+                  {!post.read && <span className="size-1.5 shrink-0 rounded-full bg-accent-600" aria-label="New" />}
+                </span>
+                <span className="block text-[12px] text-slate-500">
+                  {KIND_META[post.kind].label} · {post.author?.name ?? "Staff"} · {timeAgo(post.createdAt)}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+};
+
 const UpNextTests = () => {
   const { data, error, reload } = useApi("/me/tests");
   const now = useServerClock(data?.serverTime);
@@ -107,12 +143,13 @@ const StudentHome = () => {
           </>
         }
         description={
-          user?.cohort ? `${user.cohort.name} · ${user.institution?.name ?? ""}` : "Here's what's next for you."
+          user?.placement ? `${user.placement.label} · ${user.institution?.name ?? ""}` : "Here's what's next for you."
         }
       />
 
       <section className="space-y-3" aria-labelledby="next-heading">
         <UpNextTests />
+        <LatestPosts />
         <div className="grid gap-4 md:grid-cols-2">
           <PracticeCard
             icon={VideoCameraIcon}
@@ -139,7 +176,7 @@ const StudentHome = () => {
           <h2 id="perf-heading" className="text-sm font-semibold text-slate-900">
             Your performance
           </h2>
-          {hasPractice && <CardLink to="/performance">See details</CardLink>}
+          {hasPractice && <CardLink to="/reports">See details</CardLink>}
         </div>
         {!data ? (
           <StatGrid>
@@ -168,7 +205,7 @@ const StudentHome = () => {
       </section>
 
       <Card>
-        <CardHeader title="Recent results" action={hasPractice && <CardLink to="/performance">All results</CardLink>} />
+        <CardHeader title="Recent results" action={hasPractice && <CardLink to="/reports">All results</CardLink>} />
         {!data ? (
           <div className="p-5">
             <LoadingBlock className="h-24" />

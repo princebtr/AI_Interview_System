@@ -90,8 +90,10 @@ class TestPageTests(SittingTestCase):
                 startsAt=(timezone.now() + timedelta(days=7)).isoformat(),
                 questionIds=[q["id"] for q in detail["questions"]],
                 shuffleQuestions=detail["shuffleQuestions"],
+                audience={"level": detail["audience"]["level"], "id": detail["audience"]["id"]},
             ),
             user=self.educator,
         )
         self.assertStatus(copy, 201)
         self.assertEqual(copy.json()["assessment"]["title"], "Java Fundamentals (copy)")
+        self.assertEqual(copy.json()["assessment"]["audience"], source["audience"])

@@ -17,8 +17,8 @@ from django.utils import timezone
 from accounts import validators
 from accounts.models import User
 from accounts.tests import (
-    COHORTS,
     ME,
+    STRUCTURE,
     UPDATE_PASSWORD,
     USERS,
     ApiTestCase,
@@ -393,10 +393,16 @@ class OnboardingJourneyTests(ApiTestCase):
         self.assertStatus(changed, 200)
         token = changed.json()["token"]
 
-        # They add a cohort, an educator, another admin and a student in the cohort.
-        cohort = self.api_post(COHORTS, {"name": "Grade 10 A"}, token=token)
-        self.assertStatus(cohort, 201)
-        cohort_id = cohort.json()["cohort"]["id"]
+        # They build a batch -> department -> section -> cohort, then add an
+        # educator, another admin and a student in the cohort.
+        parent_id = None
+        for level, name in (("batch", "2026"), ("department", "Science"), ("section", "10 A"),
+                            ("cohort", "Grade 10 A")):
+            body = {"level": level, "name": name, **({"parentId": parent_id} if parent_id else {})}
+            created = self.api_post(STRUCTURE, body, token=token)
+            self.assertStatus(created, 201)
+            parent_id = created.json()["node"]["id"]
+        cohort_id = parent_id
         student_email = unique_email("student")
         new_users = [
             {"name": "Tara Teacher", "email": unique_email("teacher"), "role": "educator",
@@ -412,11 +418,15 @@ class OnboardingJourneyTests(ApiTestCase):
 
         listing = self.api_get(USERS, token=token).json()
         self.assertEqual(listing["counts"], {"admin": 2, "educator": 1, "student": 1})
-        cohorts = self.api_get(COHORTS, token=token).json()["cohorts"]
+        tree = self.api_get(STRUCTURE, token=token).json()
+        self.assertEqual(tree["counts"], {"batches": 1, "departments": 1, "sections": 1, "cohorts": 1})
+        cohorts = tree["batches"][0]["children"][0]["children"][0]["children"]
         self.assertEqual(
-            [{k: c[k] for k in ("id", "name", "studentCount")} for c in cohorts],
-            [{"id": cohort_id, "name": "Grade 10 A", "studentCount": 1}],
+            [{k: c[k] for k in ("id", "name", "label", "studentCount")} for c in cohorts],
+            [{"id": cohort_id, "name": "Grade 10 A", "label": "2026 · Science · 10 A · Grade 10 A",
+              "studentCount": 1}],
         )
+        self.assertEqual(tree["batches"][0]["studentCount"], 1)
 
         # The student lands in the right tenant and cohort, and must set a password.
         student_login = self.api_login(student_email, "Student2026")
@@ -424,9 +434,10 @@ class OnboardingJourneyTests(ApiTestCase):
         student = student_login.json()["user"]
         self.assertEqual(student["institution"]["id"], str(institution.pk))
         self.assertEqual(student["cohort"], {"id": cohort_id, "name": "Grade 10 A"})
+        self.assertEqual(student["placement"]["label"], "2026 · Science · 10 A · Grade 10 A")
         self.assertIs(student["mustChangePassword"], True)
         student_token = student_login.json()["token"]
-        self.assertPasswordChangeRequired(self.api_get(COHORTS, token=student_token))
+        self.assertPasswordChangeRequired(self.api_get(STRUCTURE, token=student_token))
 
         changed = self.api_put(
             UPDATE_PASSWORD, {"currentPassword": "Student2026", "newPassword": "MyOwnPass1"},
@@ -437,4 +448,4 @@ class OnboardingJourneyTests(ApiTestCase):
         self.assertStatus(self.api_get(ME, token=student_token), 200)
         # Still a student: no administration.
         self.assertStatus(self.api_get(USERS, token=student_token), 403)
-        self.assertStatus(self.api_get(COHORTS, token=student_token), 403)
+        self.assertStatus(self.api_get(STRUCTURE, token=student_token), 403)

@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { CheckCircleIcon, PlusIcon } from "@heroicons/react/20/solid";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
-import { Button, Field, Input, PasswordStrength, Select, SlideOver } from "../ui";
+import { Button, Input, PasswordStrength, SlideOver } from "../ui";
+import GroupPicker from "../GroupPicker";
 import CredentialList from "./CredentialList";
 import { apiError, cx, generatePassword } from "../../utils/helpers";
 import { ROLES, roleMeta } from "../../utils/roles";
+import { EMPTY_SELECTION, flatten, selectionFromPath } from "../../utils/structure";
 
 const FORM_ID = "add-user-form";
 const SERVER_FIELDS = ["name", "email", "role", "password", "cohortId", "requirePasswordChange"];
@@ -15,111 +18,29 @@ const DEFAULTS = {
   role: "student",
   name: "",
   email: "",
-  cohortId: "",
   password: "",
   requirePasswordChange: true,
 };
 
-/** Inline "new cohort" field, so admins can create a student's cohort without leaving the form. */
-const NewCohort = ({ name, onNameChange, onCreated, onCancel, canCancel, error: formError }) => {
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const shownError = error || formError;
-
-  const create = async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Enter a cohort name");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const { data } = await api.post("/institution/cohorts", { name: trimmed });
-      toast.success(`Cohort "${data.cohort.name}" created`);
-      onCreated(data.cohort);
-    } catch (err) {
-      setError(apiError(err, "Couldn't create the cohort. Try again."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Field
-      id="new-cohort-name"
-      label="New cohort"
-      error={shownError}
-      hint="Group students who study together, e.g. CSE-2027."
-      action={
-        canCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-[13px] font-medium text-slate-500 hover:text-slate-800"
-          >
-            Choose existing
-          </button>
-        )
-      }
-    >
-      <div className="flex gap-2">
-        <input
-          id="new-cohort-name"
-          value={name}
-          maxLength={60}
-          autoFocus={canCancel}
-          placeholder="Cohort name"
-          aria-invalid={shownError ? true : undefined}
-          aria-describedby={shownError ? "new-cohort-name-error" : "new-cohort-name-hint"}
-          onChange={(e) => {
-            setError("");
-            onNameChange(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            // Enter would otherwise submit the whole add-user form.
-            if (e.key === "Enter") {
-              e.preventDefault();
-              create();
-            }
-          }}
-          className={cx(
-            "block h-10 w-full rounded-md border bg-white px-3 text-sm text-slate-900 shadow-xs placeholder:text-slate-400 focus:ring-3 focus:outline-none",
-            shownError
-              ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
-              : "border-slate-300 focus:border-accent-600 focus:ring-accent-600/15"
-          )}
-        />
-        <Button variant="secondary" onClick={create} loading={saving} className="h-10">
-          Create
-        </Button>
-      </div>
-    </Field>
-  );
+/** The selection that puts a student in the cohort with that id (empty if unknown). */
+const selectionForCohort = (tree, cohortId) => {
+  const cohort = cohortId && flatten(tree).find((n) => n.level === "cohort" && n.id === cohortId);
+  return cohort ? selectionFromPath(cohort.path) : EMPTY_SELECTION;
 };
 
-const AddUserPanel = ({
-  onClose,
-  cohorts,
-  onCohortCreated,
-  onCreated,
-  initialRole = "student",
-  initialCohortId = "",
-}) => {
+/** `tree` is the academic structure (GET /institution/structure → batches). */
+const AddUserPanel = ({ onClose, tree, onCreated, initialRole = "student", initialCohortId = "" }) => {
   const { user: admin } = useAuth();
   const [created, setCreated] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [addingCohort, setAddingCohort] = useState(false);
-  const [newCohortName, setNewCohortName] = useState("");
-  const [previousCohort, setPreviousCohort] = useState("");
-  const [focusCohortSelect, setFocusCohortSelect] = useState(false);
+  const [placement, setPlacement] = useState(() => selectionForCohort(tree, initialCohortId));
+  const hasCohorts = flatten(tree).some((n) => n.level === "cohort");
 
   const {
     register,
     handleSubmit,
     watch,
     reset,
-    getValues,
     setError,
     setValue,
     clearErrors,
@@ -128,59 +49,28 @@ const AddUserPanel = ({
     defaultValues: {
       ...DEFAULTS,
       role: ROLES.some((r) => r.value === initialRole) ? initialRole : "student",
-      cohortId: cohorts.some((c) => c.id === initialCohortId) ? initialCohortId : "",
     },
   });
 
   const role = watch("role");
   const password = watch("password");
-  const showCohortCreator = addingCohort || cohorts.length === 0;
 
   const fillGeneratedPassword = () => {
     setValue("password", generatePassword(), { shouldDirty: true, shouldValidate: true });
     setShowPassword(true);
   };
 
-  // Never keep a cohort selected that the admin can no longer see.
-  const startNewCohort = () => {
-    setPreviousCohort(getValues("cohortId"));
-    setValue("cohortId", "");
+  const choosePlacement = (next) => {
+    setPlacement(next);
     clearErrors("cohortId");
-    setAddingCohort(true);
-  };
-
-  const cancelNewCohort = () => {
-    setValue("cohortId", previousCohort);
-    setNewCohortName("");
-    setAddingCohort(false);
-    setFocusCohortSelect(true);
-  };
-
-  const handleCohortCreated = (cohort) => {
-    onCohortCreated(cohort);
-    setValue("cohortId", cohort.id, { shouldDirty: true });
-    clearErrors("cohortId");
-    setNewCohortName("");
-    setAddingCohort(false);
-    setFocusCohortSelect(true);
   };
 
   const onSubmit = async (values) => {
-    if (values.role === "student") {
-      if (showCohortCreator) {
-        const pending = newCohortName.trim();
-        setError("cohortId", {
-          message: pending
-            ? `Press Create to add "${pending}" first, or choose an existing cohort.`
-            : "Create a cohort for this student first.",
-        });
-        document.getElementById("new-cohort-name")?.focus();
-        return;
-      }
-      if (!values.cohortId) {
-        setError("cohortId", { message: "Choose a cohort for this student" }, { shouldFocus: true });
-        return;
-      }
+    if (values.role === "student" && !placement.cohort) {
+      setError("cohortId", {
+        message: hasCohorts ? "Choose the student's batch, department, section and cohort" : "Set up a cohort first",
+      });
+      return;
     }
 
     const body = {
@@ -189,7 +79,7 @@ const AddUserPanel = ({
       role: values.role,
       password: values.password,
       requirePasswordChange: values.requirePasswordChange,
-      ...(values.role === "student" && { cohortId: values.cohortId }),
+      ...(values.role === "student" && { cohortId: placement.cohort }),
     };
 
     try {
@@ -211,16 +101,15 @@ const AddUserPanel = ({
   };
 
   const addAnother = () => {
-    // Keep role and cohort: admins usually add several people of the same kind in a row.
-    reset({ ...DEFAULTS, role: created.user.role, cohortId: created.user.cohort?.id ?? "" });
+    // Keep role and placement: admins usually add several people of the same kind in a row.
+    reset({ ...DEFAULTS, role: created.user.role });
     setShowPassword(false);
-    setFocusCohortSelect(false);
     setCreated(null);
   };
 
   // Escape / backdrop: confirm before discarding what the admin typed.
   const dismissForm = () => {
-    if ((isDirty || newCohortName) && !window.confirm("Discard this user? What you've entered will be lost.")) {
+    if (isDirty && !window.confirm("Discard this user? What you've entered will be lost.")) {
       return;
     }
     onClose();
@@ -263,7 +152,7 @@ const AddUserPanel = ({
               <p className="text-sm font-medium text-slate-900">{created.user.name} was added</p>
               <p className="text-[13px] text-slate-500">
                 {meta.label}
-                {created.user.cohort && ` · ${created.user.cohort.name}`}
+                {created.user.placement && ` · ${created.user.placement.label}`}
               </p>
             </div>
           </div>
@@ -357,39 +246,33 @@ const AddUserPanel = ({
           />
 
           {role === "student" &&
-            (showCohortCreator ? (
-              <NewCohort
-                name={newCohortName}
-                onNameChange={setNewCohortName}
-                canCancel={cohorts.length > 0}
-                onCancel={cancelNewCohort}
-                onCreated={handleCohortCreated}
-                error={errors.cohortId?.message}
-              />
+            (hasCohorts ? (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-slate-800">Placement</legend>
+                <p className="text-[13px] text-slate-500">
+                  Every student sits in one cohort. Tests assigned to any group above it reach them too.
+                </p>
+                <GroupPicker
+                  idPrefix="new-user"
+                  tree={tree}
+                  value={placement}
+                  onChange={choosePlacement}
+                  requireCohort
+                  error={errors.cohortId?.message}
+                />
+              </fieldset>
             ) : (
-              <Select
-                id="new-user-cohort"
-                label="Cohort"
-                autoFocus={focusCohortSelect}
-                error={errors.cohortId?.message}
-                action={
-                  <button
-                    type="button"
-                    onClick={startNewCohort}
-                    className="text-[13px] font-medium text-accent-700 hover:text-accent-800"
-                  >
-                    New cohort
-                  </button>
-                }
-                {...register("cohortId", { onChange: () => clearErrors("cohortId") })}
-              >
-                <option value="">Choose a cohort</option>
-                {cohorts.map((cohort) => (
-                  <option key={cohort.id} value={cohort.id}>
-                    {cohort.name}
-                  </option>
-                ))}
-              </Select>
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
+                <p className="font-medium">Set up a cohort first</p>
+                <p className="mt-1 text-amber-800">
+                  Students sit in a cohort within a batch, department and section.{" "}
+                  <Link to="/structure" className="font-medium underline">
+                    Build the academic structure
+                  </Link>{" "}
+                  and come back.
+                </p>
+                {errors.cohortId?.message && <p className="mt-1 text-red-700">{errors.cohortId.message}</p>}
+              </div>
             ))}
         </div>
 

@@ -5,6 +5,7 @@ from . import views
 
 urlpatterns = [
     path("questions", views.questions),
+    path("questions/import", views.import_questions),
     path("questions/<str:question_id>", views.question_detail),
     path("teaching/overview", views.overview),
     path("teaching/students", views.students),

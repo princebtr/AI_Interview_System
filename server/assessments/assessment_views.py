@@ -1,7 +1,8 @@
 """Scheduled tests: educators create and review them, students sit them.
 
-Everything is scoped to the caller's institution; students only ever see tests
-assigned to their own cohort.
+Everything is scoped to the caller's institution. A test is assigned to a batch,
+department, section or cohort; students only ever see tests assigned to a group
+they belong to.
 """
 from datetime import timedelta
 
@@ -15,7 +16,8 @@ from accounts import validators as v
 from accounts.auth import jwt_required, role_required
 from accounts.models import User
 from config.http import BadRequest, api_view, error, json_body
-from institutions.models import AuditLog, Cohort
+from institutions import structure
+from institutions.models import AuditLog
 
 from . import monitoring, sitting
 from .models import Assessment, AssessmentAttempt, Question, ViolationEvent
@@ -61,25 +63,15 @@ def _percentage(attempt, assessment):
     return round(final / assessment.total_marks * 100, 1)
 
 
-def _finalize_closed(assessments):
-    """Submit attempts left open on tests that have closed."""
-    now = timezone.now()
-    closed = [a.pk for a in assessments if a.ends_at <= now]
-    if not closed:
-        return
-    for attempt in AssessmentAttempt.objects.filter(assessment_id__in=closed, submitted_at=None).select_related(
-        "assessment"
-    ):
-        sitting.finalize_if_expired(attempt, now)
-
-
 # --------------------------------------------------------------------------- #
 # Staff                                                                       #
 # --------------------------------------------------------------------------- #
 
 
 def _staff_queryset(request):
-    tests = Assessment.objects.filter(institution=request.user.institution).select_related("cohort", "created_by")
+    tests = Assessment.objects.filter(institution=request.user.institution).select_related(
+        *Assessment.AUDIENCE_FIELDS, "created_by"
+    )
     if request.user.role != "admin":
         tests = tests.filter(created_by=request.user)
     return tests
@@ -87,12 +79,8 @@ def _staff_queryset(request):
 
 def list_assessments(request):
     tests = list(_staff_queryset(request).order_by("-starts_at"))
-    _finalize_closed(tests)
-    cohort_sizes = {}
-    for cohort_id in User.objects.filter(
-        institution=request.user.institution, role="student", cohort_id__in=[t.cohort_id for t in tests]
-    ).values_list("cohort_id", flat=True):
-        cohort_sizes[cohort_id] = cohort_sizes.get(cohort_id, 0) + 1
+    sitting.finalize_closed(tests)
+    group_sizes = structure.student_counts(request.user.institution)
 
     stats = {t.pk: {"submitted": 0, "inProgress": 0, "_pct": []} for t in tests}
     by_id = {t.pk: t for t in tests}
@@ -114,7 +102,7 @@ def list_assessments(request):
         result.append(
             {
                 **t.summary(),
-                "students": cohort_sizes.get(t.cohort_id, 0),
+                "students": group_sizes.get(t.audience_key(), 0),
                 **entry,
                 "averagePercentage": round(sum(scores) / len(scores), 1) if scores else None,
             }
@@ -131,9 +119,14 @@ def create_assessment(request):
     subject = _text(data, "subject", 200, errors, "Subject")
     instructions = _text(data, "instructions", 2000, errors, "Instructions")
 
-    cohort = _find(Cohort, data.get("cohortId"), institution=institution) if isinstance(data.get("cohortId"), str) else None
-    if cohort is None:
-        errors.append({"field": "cohortId", "message": "Choose a cohort"})
+    audience = data.get("audience")
+    audience = (
+        structure.find_node(institution, audience.get("level"), audience.get("id"))
+        if isinstance(audience, dict)
+        else None
+    )
+    if audience is None:
+        errors.append({"field": "audience", "message": "Choose who takes this test"})
 
     now = timezone.now()
     raw_start = data.get("startsAt")
@@ -179,10 +172,9 @@ def create_assessment(request):
         message = "Some selected questions aren't in your institution's question bank"
         raise BadRequest(message, [{"field": "questionIds", "message": message}])
 
-    assessment = Assessment.objects.create(
+    assessment = Assessment(
         institution=institution,
         created_by=request.user,
-        cohort=cohort,
         title=title,
         subject=subject,
         instructions=instructions,
@@ -202,11 +194,13 @@ def create_assessment(request):
             for qid in question_ids
         ],
     )
+    assessment.set_audience(audience)
+    assessment.save()
     AuditLog.record(
         institution,
         request.user,
         "assessment.created",
-        f"Scheduled the test {assessment.title} for {cohort.name}",
+        f"Scheduled the test {assessment.title} for {audience.label}",
         assessmentId=str(assessment.pk),
     )
     return JsonResponse({"success": True, "assessment": assessment.summary()}, status=201)
@@ -312,10 +306,12 @@ def assessment_detail(request, assessment_id):
         attempts[attempt.student_id] = sitting.finalize_if_expired(attempt, now)
 
     students = list(
-        User.objects.filter(institution=request.user.institution, role="student", cohort=assessment.cohort).order_by("name")
+        User.objects.filter(
+            institution=request.user.institution, role="student", **assessment.audience_filter()
+        ).order_by("name")
     )
     seen = {s.pk for s in students}
-    # People who sat the test but have since left the cohort still have results.
+    # People who sat the test but have since left its group still have results.
     students += list(User.objects.filter(pk__in=[pk for pk in attempts if pk not in seen]))
 
     closed = assessment.status(now) == "closed"
@@ -372,12 +368,10 @@ def assessment_detail(request, assessment_id):
 
 
 def _student_test(request, assessment_id):
-    user = request.user
-    if not user.cohort_id:
+    try:
+        return Assessment.for_student(request.user).filter(pk=assessment_id).first()
+    except ValidationError:  # not a valid ObjectId
         return None
-    return _find(
-        Assessment, assessment_id, institution=user.institution, cohort_id=user.cohort_id
-    )
 
 
 @require_http_methods(["GET"])
@@ -385,11 +379,9 @@ def _student_test(request, assessment_id):
 @role_required("student")
 def my_tests(request):
     user = request.user
-    if not user.cohort_id:
-        return JsonResponse({"tests": [], "serverTime": timezone.now()})
     tests = list(
-        Assessment.objects.filter(institution=user.institution, cohort_id=user.cohort_id)
-        .select_related("cohort", "created_by")
+        Assessment.for_student(user)
+        .select_related(*Assessment.AUDIENCE_FIELDS, "created_by")
         .order_by("starts_at")
     )
     now = timezone.now()

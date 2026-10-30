@@ -4,14 +4,15 @@ import {
   AcademicCapIcon,
   ArrowRightStartOnRectangleIcon,
   Bars3Icon,
-  BuildingLibraryIcon,
   CalendarDaysIcon,
   ChartBarIcon,
+  ChatBubbleLeftRightIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ClipboardDocumentCheckIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
+  DocumentPlusIcon,
   DocumentChartBarIcon,
   HomeIcon,
   RectangleStackIcon,
@@ -23,6 +24,7 @@ import {
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/AuthContext";
+import { useUnreadPosts } from "../../hooks/useUnreadPosts";
 import { InstitutionLogo, LogoMark } from "../ui";
 import { cx, initials } from "../../utils/helpers";
 import { roleMeta } from "../../utils/roles";
@@ -35,23 +37,24 @@ const NAVIGATION = {
     items: [
       { to: "/dashboard", label: "Dashboard", icon: Squares2X2Icon },
       { to: "/users", label: "Users", icon: UsersIcon },
-      { to: "/cohorts", label: "Cohorts", icon: UserGroupIcon },
-      { label: "Departments", icon: BuildingLibraryIcon, soon: true },
+      { to: "/structure", label: "Structure", icon: UserGroupIcon },
+      { to: "/board", label: "Notes & Messages", icon: ChatBubbleLeftRightIcon },
       { label: "Programs", icon: AcademicCapIcon, soon: true },
       { to: "/assessments", label: "Tests", icon: ClipboardDocumentListIcon },
       { label: "AI Interviews", icon: VideoCameraIcon, soon: true },
-      { label: "Reports", icon: DocumentChartBarIcon, soon: true },
+      { to: "/reports", label: "Reports", icon: DocumentChartBarIcon },
     ],
   },
   educator: {
     label: "Educator Portal",
     items: [
       { to: "/dashboard", label: "Dashboard", icon: Squares2X2Icon },
-      { to: "/generator", label: "AI Generator", icon: SparklesIcon },
-      { to: "/questions", label: "Question Bank", icon: RectangleStackIcon },
+      { to: "/questions/add", label: "Add Questions", icon: DocumentPlusIcon },
+      { to: "/questions", label: "Question Bank", icon: RectangleStackIcon, end: true },
       { to: "/students", label: "My Students", icon: AcademicCapIcon },
       { to: "/assessments", label: "Tests", icon: ClipboardDocumentListIcon },
-      { label: "Reports", icon: DocumentChartBarIcon, soon: true },
+      { to: "/board", label: "Notes & Messages", icon: ChatBubbleLeftRightIcon },
+      { to: "/reports", label: "Reports", icon: DocumentChartBarIcon },
     ],
   },
   student: {
@@ -59,9 +62,10 @@ const NAVIGATION = {
     items: [
       { to: "/dashboard", label: "Home", icon: HomeIcon },
       { to: "/tests", label: "My Tests", icon: CalendarDaysIcon },
+      { to: "/board", label: "Notes & Messages", icon: ChatBubbleLeftRightIcon, badge: "unread" },
       { to: "/interview", label: "AI Interview", icon: VideoCameraIcon },
       { to: "/assessment", label: "Practice Test", icon: ClipboardDocumentCheckIcon },
-      { to: "/performance", label: "My Performance", icon: ChartBarIcon },
+      { to: "/reports", label: "My Reports", icon: ChartBarIcon },
     ],
   },
 };
@@ -72,7 +76,7 @@ const itemBase =
   "flex flex-col items-center justify-center gap-1 rounded-lg px-1 py-2.5 text-center text-[11px] leading-tight transition-colors";
 
 // A compact rail in the primary colour: icon over a short label; the active item is a white tile.
-const NavItem = ({ item, onNavigate }) => {
+const NavItem = ({ item, onNavigate, count = 0 }) => {
   const { to, label, icon: Icon, soon, end } = item;
 
   if (soon) {
@@ -101,8 +105,16 @@ const NavItem = ({ item, onNavigate }) => {
     >
       {({ isActive }) => (
         <>
-          <Icon className={cx("size-5 shrink-0", isActive && "text-accent-600")} />
+          <span className="relative">
+            <Icon className={cx("size-5 shrink-0", isActive && "text-accent-600")} />
+            {count > 0 && (
+              <span className="absolute -top-1.5 -right-2.5 min-w-4 rounded-full bg-red-600 px-1 text-[10px] leading-4 font-semibold text-white tabular-nums">
+                {count > 99 ? "99+" : count}
+              </span>
+            )}
+          </span>
           <span>{label}</span>
+          {count > 0 && <span className="sr-only">({count} new)</span>}
         </>
       )}
     </NavLink>
@@ -112,6 +124,7 @@ const NavItem = ({ item, onNavigate }) => {
 const SidebarContent = ({ onNavigate }) => {
   const { user } = useAuth();
   const navigation = NAVIGATION[user?.role] ?? NAVIGATION.student;
+  const unread = useUnreadPosts(user?.role === "student");
   const institution = user?.institution;
 
   return (
@@ -131,7 +144,7 @@ const SidebarContent = ({ onNavigate }) => {
         <ul className="space-y-1">
           {navigation.items.map((item) => (
             <li key={item.label}>
-              <NavItem item={item} onNavigate={onNavigate} />
+              <NavItem item={item} onNavigate={onNavigate} count={item.badge === "unread" ? unread : 0} />
             </li>
           ))}
         </ul>
@@ -230,8 +243,9 @@ const CRUMB_LABELS = {
   "/settings/institution": "Institution",
   "/users": "Users",
   "/users/import": "Import users",
-  "/cohorts": "Cohorts",
-  "/generator": "AI Generator",
+  "/structure": "Structure",
+  "/board": "Notes & messages",
+  "/questions/add": "Add questions",
   "/questions": "Question Bank",
   "/students": "My Students",
   "/assessments": "Tests",
@@ -240,9 +254,17 @@ const CRUMB_LABELS = {
   "/assessment": "Practice Test",
   "/tests": "My Tests",
   "/tests/setup-check": "Check my setup",
-  "/performance": "My Performance",
+  "/reports": "Reports",
 };
-const DETAIL_LABELS = { "/cohorts": "Cohort details", "/assessments": "Test details", "/tests": "Test" };
+const DETAIL_LABELS = {
+  "/reports/students": "Student report",
+  "/structure/batch": "Batch",
+  "/structure/department": "Department",
+  "/structure/section": "Section",
+  "/structure/cohort": "Cohort",
+  "/assessments": "Test details",
+  "/tests": "Test",
+};
 
 const Breadcrumbs = () => {
   const { pathname } = useLocation();

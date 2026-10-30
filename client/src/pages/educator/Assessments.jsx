@@ -24,7 +24,7 @@ const Assessments = () => {
         description={
           isAdmin
             ? "Every scheduled test in your institution, with submissions and average scores."
-            : "Schedule multiple-choice tests for your cohorts and follow the results."
+            : "Schedule multiple-choice tests for any batch, department, section or cohort and follow the results."
         }
         actions={
           <Button onClick={() => navigate("/assessments/new")}>
@@ -48,7 +48,7 @@ const Assessments = () => {
             <EmptyState
               icon={ClipboardDocumentListIcon}
               title="No tests yet"
-              description="Create a test from your question bank, pick when it happens and assign it to a cohort."
+              description="Create a test from your question bank, pick when it happens and assign it to a batch, department, section or cohort."
               action={
                 <Button onClick={() => navigate("/assessments/new")}>
                   <PlusIcon className="size-4" />
@@ -62,7 +62,7 @@ const Assessments = () => {
                 <thead>
                   <tr className="border-b border-slate-100 text-left text-[12px] text-slate-500">
                     <th className="px-5 py-2.5 font-medium">Test</th>
-                    <th className="hidden px-5 py-2.5 font-medium md:table-cell">Cohort</th>
+                    <th className="hidden px-5 py-2.5 font-medium md:table-cell">Assigned to</th>
                     <th className="hidden px-5 py-2.5 font-medium lg:table-cell">When</th>
                     <th className="px-5 py-2.5 font-medium">Status</th>
                     <th className="hidden px-5 py-2.5 text-right font-medium sm:table-cell">Submitted</th>
@@ -81,7 +81,7 @@ const Assessments = () => {
                           {isAdmin && t.createdBy && ` · ${t.createdBy.name}`}
                         </p>
                       </td>
-                      <td className="hidden px-5 py-3 text-slate-700 md:table-cell">{t.cohort.name}</td>
+                      <td className="hidden px-5 py-3 text-[13px] text-slate-700 md:table-cell">{t.audience.label}</td>
                       <td className="hidden px-5 py-3 text-slate-600 lg:table-cell">{formatDateTime(t.startsAt)}</td>
                       <td className="px-5 py-3">
                         <TestStatusBadge status={t.status} />

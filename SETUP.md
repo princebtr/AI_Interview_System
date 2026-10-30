@@ -59,18 +59,25 @@ sign-in details. The admin must replace the temporary password at first sign-in.
 Use `--no-input` with flags for scripted onboarding (`--help` lists them).
 
 The admin then adds educators, students and other admins from **People → Users**
-(one at a time) or **People → Import users** (CSV). Students are placed in a cohort,
-which can be created from the same form or during an import.
+(one at a time) or **People → Import users** (CSV). First set up the academic structure
+under **Structure**: Batch → Department → Section → Cohort. Every student is placed in all
+four (a CSV import can create missing groups as it goes).
 
 After signing in, each role lands on its own home: admins on the institution
 dashboard, educators on their teaching workspace, students on their personal hub.
 
 Educators schedule tests from **Tests → Create test** (questions come from the
-question bank, so save some there first, e.g. with the AI generator). Students in
-the chosen cohort find them under **My tests**.
+question bank, so add some there first under **Add Questions**: generate them with AI, write
+your own, or import a CSV). A test is assigned
+to a batch, department, section or cohort, and every student under it finds it under
+**My tests**.
 
 Run `python manage.py migrate` after pulling: scheduled tests add the
-`assessments` 0002 migration, proctoring adds `assessments` 0003-0004 and `ai` 0004.
+`assessments` 0002 migration, proctoring adds `assessments` 0003-0004 and `ai` 0004, and
+the academic structure adds `institutions` 0006, `accounts` 0005 and `assessments` 0005
+(existing cohorts are moved under a "<academic year> → General → General" batch,
+department and section, which admins can rename). Notes & messages add `board` 0001 and
+`assessments` 0006 (no data changes); comments and reactions add `board` 0002.
 
 Camera and phone checks need two model files in `server/models/` (YOLO11m, 40 MB, and the
 YuNet face detector, 232 KB; downloaded and checksum-verified, not committed):
@@ -130,10 +137,15 @@ The client calls `http://localhost:8000/api` by default; override with `VITE_API
 
 - Auth: `POST /api/auth/login`, `GET /api/auth/logout`, `POST /api/auth/logout-all`,
   `GET /api/auth/me`, `PUT /api/auth/updatedetails`, `PUT /api/auth/updatepassword`
-- Institution admin (JWT): `/api/institution/overview`, `/activity`, `/users` (+ `/import`,
-  `/<id>/reset-password`), `/cohorts` (+ `/<id>`)
+- Institution admin (JWT): `/api/institution/overview`, `/activity`, `/users` (+ `/import`, `/export`,
+  `/<id>`, `/<id>/reset-password`), `/structure` (+ `/<level>/<id>`)
 - Educators (JWT): `/api/teaching/overview`, `/api/teaching/students`, `/api/questions`,
   `/api/assessments` (+ `/<id>`) for scheduled tests
+- Reports (JWT): `/api/reports/me` (students), `/api/reports/overview` and
+  `/api/reports/students/<id>` (admins, educators)
+- Notes & messages (JWT, every role): `/api/board/posts` (+ `/<id>`, `/<id>/read`,
+  `/<id>/comments` (+ `/<commentId>`), `/<id>/reactions/<kind>`, `/<id>/attachments` (+ `/<fileId>`)),
+  `/api/board/unread`
 - Students (JWT): `/api/me/performance`, `/api/me/tests` (+ `/<id>`, `/<id>/start`,
   `/<id>/answers`, `/<id>/submit`)
 - AI (JWT required, `POST`): `/api/ai/generate-question`, `/api/ai/evaluate-answer`,

@@ -35,9 +35,9 @@ const MyTests = () => {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={user?.cohort?.name}
+        eyebrow={user?.placement?.label}
         title="My tests"
-        description="Tests your educators have assigned to your cohort. Each one opens at its start time and closes when its time is up."
+        description="Tests your educators have assigned to your batch, department, section or cohort. Each one opens at its start time and closes when its time is up."
         actions={
           <Link to="/tests/setup-check" className={buttonStyles({ variant: "secondary" })}>
             <VideoCameraIcon className="size-4" />
@@ -57,7 +57,7 @@ const MyTests = () => {
           <EmptyState
             icon={CalendarDaysIcon}
             title="No tests yet"
-            description="When an educator assigns a test to your cohort, it shows up here with its start time and duration."
+            description="When an educator assigns a test to one of your groups, it shows up here with its start time and duration."
           />
         </Card>
       ) : (

@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { AcademicCapIcon } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
-import { Button, SearchInput, Select } from "./ui";
+import { Button, SearchInput } from "./ui";
 import { EmptyState, LoadError, ScoreBar } from "./data";
+import GroupPicker from "./GroupPicker";
 import { cx, initials } from "../utils/helpers";
+import { EMPTY_SELECTION, selectionParams } from "../utils/structure";
 import { formatPercent } from "../utils/scores";
 import { timeAgo } from "../utils/time";
 
@@ -26,62 +29,54 @@ const SignInStatus = ({ student }) => {
 
 /**
  * Students of the signed-in user's institution with their practice stats.
- * Pass `cohortId` to lock the table to one cohort; otherwise a cohort filter is shown.
+ * Pass `scope` (e.g. {section: id}) to lock the table to one group; otherwise
+ * Batch / Department / Section / Cohort filters are shown.
  */
-const StudentsTable = ({ cohortId, showCohort = true }) => {
+const StudentsTable = ({ scope, showPlacement = true }) => {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [cohort, setCohort] = useState("");
+  const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [pages, setPages] = useState(1);
-  const cohorts = useApi(cohortId ? null : "/institution/cohorts");
+  const structure = useApi(scope ? null : "/institution/structure");
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
+  const groupParams = scope ?? selectionParams(selection);
+  const groupKey = JSON.stringify(groupParams);
   // A new filter starts again from the first page.
-  useEffect(() => setPages(1), [query, cohort, cohortId]);
+  useEffect(() => setPages(1), [query, groupKey]);
 
-  const activeCohort = cohortId || cohort;
   const { data, loading, error, reload } = useApi("/teaching/students", {
     limit: Math.min(MAX_LIMIT, PAGE_SIZE * pages),
-    ...(activeCohort && { cohort: activeCohort }),
+    ...groupParams,
     ...(query && { q: query }),
   });
 
   const students = data?.students ?? [];
   const total = data?.total ?? 0;
-  const filtered = Boolean(query || cohort);
+  const filtered = Boolean(query || (!scope && Object.keys(groupParams).length));
   const canLoadMore = students.length < total && PAGE_SIZE * pages < MAX_LIMIT;
 
   return (
     <div>
-      <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-end">
-        {!cohortId && (cohorts.data?.cohorts?.length ?? 0) > 0 && (
-          <div className="sm:w-48">
-            <label htmlFor="students-cohort" className="sr-only">
-              Filter by cohort
-            </label>
-            <Select
-              id="students-cohort"
-              value={cohort}
-              onChange={(e) => setCohort(e.target.value)}
-              compact
-            >
-              <option value="">All cohorts</option>
-              {cohorts.data.cohorts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 xl:flex-row xl:items-center xl:justify-end">
+        {!scope && (structure.data?.batches?.length ?? 0) > 0 && (
+          <GroupPicker
+            mode="filter"
+            idPrefix="students"
+            tree={structure.data.batches}
+            value={selection}
+            onChange={setSelection}
+            className="xl:flex-1"
+          />
         )}
         <SearchInput
           id="students-search"
           label="Search students"
-          className="sm:w-64"
+          className="xl:w-64"
           value={search}
           maxLength={100}
           placeholder="Search name or email"
@@ -99,7 +94,7 @@ const StudentsTable = ({ cohortId, showCohort = true }) => {
             <thead>
               <tr className="border-b border-slate-100 text-left text-[12px] text-slate-500">
                 <th className="px-5 py-2.5 font-medium">Student</th>
-                {showCohort && <th className="hidden px-5 py-2.5 font-medium md:table-cell">Cohort</th>}
+                {showPlacement && <th className="hidden px-5 py-2.5 font-medium md:table-cell">Group</th>}
                 <th className="hidden px-5 py-2.5 font-medium lg:table-cell">Status</th>
                 <th className="px-5 py-2.5 text-right font-medium">Sessions</th>
                 <th className="hidden px-5 py-2.5 font-medium sm:table-cell">Avg score</th>
@@ -123,7 +118,7 @@ const StudentsTable = ({ cohortId, showCohort = true }) => {
                       title={filtered ? "No students match these filters" : "No students yet"}
                       description={
                         filtered
-                          ? "Try a different search or cohort."
+                          ? "Try a different search or group."
                           : "Students appear here once an admin adds them."
                       }
                     />
@@ -138,14 +133,19 @@ const StudentsTable = ({ cohortId, showCohort = true }) => {
                           {initials(s.name)}
                         </span>
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-slate-900">{s.name}</p>
+                          <Link
+                            to={`/reports/students/${s.id}`}
+                            className="block truncate font-medium text-slate-900 hover:text-accent-700"
+                          >
+                            {s.name}
+                          </Link>
                           <p className="truncate text-[13px] text-slate-500">{s.email}</p>
                         </div>
                       </div>
                     </td>
-                    {showCohort && (
-                      <td className="hidden px-5 py-3 text-slate-700 md:table-cell">
-                        {s.cohort?.name ?? <span className="text-slate-300">—</span>}
+                    {showPlacement && (
+                      <td className="hidden px-5 py-3 text-[13px] text-slate-700 md:table-cell">
+                        {s.placement?.label ?? <span className="text-slate-300">—</span>}
                       </td>
                     )}
                     <td className="hidden px-5 py-3 lg:table-cell">

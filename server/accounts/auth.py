@@ -38,7 +38,7 @@ def get_request_user(request):
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
         user = (
-            User.objects.select_related("institution", "cohort")
+            User.objects.select_related("institution", *User.PLACEMENT_FIELDS)
             .defer("institution__logo")
             .filter(pk=payload["id"])
             .first()

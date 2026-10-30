@@ -97,8 +97,8 @@ const AccountTab = () => {
           title="Account details"
           description={
             isAdmin
-              ? "You can change roles and cohorts for everyone from Users."
-              : "Your institution, role and cohort are managed by your administrator."
+              ? "You can change roles and placements for everyone from Users."
+              : "Your institution, role and placement are managed by your administrator."
           }
           action={
             isAdmin && (
@@ -118,7 +118,9 @@ const AccountTab = () => {
           <Row label="Role">
             <Badge tone={role.tone}>{role.label}</Badge>
           </Row>
-          {user?.role === "student" && <Row label="Cohort">{user?.cohort?.name ?? "Not assigned yet"}</Row>}
+          {user?.role === "student" && (
+            <Row label="Batch · Department · Section · Cohort">{user?.placement?.label ?? "Not assigned yet"}</Row>
+          )}
           <Row label="Email">
             <span className="flex items-center gap-2">
               <span className="truncate">{user?.email}</span>

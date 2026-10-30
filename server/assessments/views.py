@@ -12,8 +12,10 @@ from accounts.auth import jwt_required, role_required
 from accounts.models import User
 from ai import stats
 from ai.models import PracticeAttempt
+from config.csvfile import read_csv
 from config.http import BadRequest, api_view, clean_query, error, json_body
-from institutions.models import Cohort
+from institutions import structure
+from institutions.models import MODELS, AuditLog
 
 from .models import Question
 
@@ -180,6 +182,152 @@ def questions(request):
     return create_questions(request) if request.method == "POST" else list_questions(request)
 
 
+# --------------------------------------------------------------------------- #
+# CSV import                                                                  #
+# --------------------------------------------------------------------------- #
+
+IMPORT_COLUMNS = (
+    "subject", "topic", "difficulty", "question",
+    "option_a", "option_b", "option_c", "option_d", "correct_answer", "explanation",
+)
+REQUIRED_COLUMNS = ("question", "option_a", "option_b", "option_c", "option_d", "correct_answer")
+# Other header spellings people use (keys are already lower_snake_case).
+IMPORT_ALIASES = {
+    "text": "question", "question_text": "question",
+    "a": "option_a", "b": "option_b", "c": "option_c", "d": "option_d",
+    "answer": "correct_answer", "correct": "correct_answer", "correct_option": "correct_answer", "key": "correct_answer",
+    "level": "difficulty",
+}
+MAX_IMPORT_QUESTIONS = 500
+
+
+def _text_key(text):
+    return " ".join(text.split()).casefold()
+
+
+def _answer_letter(raw, options):
+    """A-D from "b", "Option B", "B)" or the exact text of one option; else None."""
+    value = raw.strip()
+    compact = value.upper().replace("OPTION", "").strip(" .):")
+    if compact in LETTERS:
+        return compact
+    matches = [letter for letter, text in options.items() if text and _text_key(text) == _text_key(value)]
+    return matches[0] if len(matches) == 1 else None
+
+
+@require_http_methods(["POST"])
+@jwt_required
+@role_required(*STAFF)
+@api_view
+def import_questions(request):
+    """Multipart `file` (CSV). commit=false checks every row; commit=true saves the
+    valid ones. A `subject` form field fills rows whose subject cell is blank."""
+    institution = request.user.institution
+    commit = request.POST.get("commit") == "true"
+    default_subject = " ".join(request.POST.get("subject", "").split())[:200]
+    records = read_csv(
+        request.FILES.get("file"),
+        columns=IMPORT_COLUMNS,
+        required=REQUIRED_COLUMNS if default_subject else ("subject", *REQUIRED_COLUMNS),
+        aliases=IMPORT_ALIASES,
+        example="subject,topic,difficulty,question,option_a,option_b,option_c,option_d,correct_answer,explanation",
+        noun="questions",
+        max_rows=MAX_IMPORT_QUESTIONS,
+    )
+
+    existing = {
+        (subject_key, _text_key(text))
+        for subject_key, text in Question.objects.filter(institution=institution).values_list("subject_key", "text")
+    }
+    first_line, rows = {}, []
+    for line, values in records:
+        options = {letter: values.get(f"option_{letter.lower()}", "") for letter in LETTERS}
+        answer = values.get("correct_answer", "")
+        letter = _answer_letter(answer, options) if answer else None
+        difficulty = values.get("difficulty", "").lower() or "medium"
+        item = {
+            "text": values.get("question", ""),
+            "subject": values.get("subject") or default_subject,
+            "topic": values.get("topic", ""),
+            "difficulty": difficulty,
+            "options": options,
+            "correctAnswer": letter,
+            "explanation": values.get("explanation", ""),
+        }
+        fields, errors = _clean_question(item)
+        # Friendlier wording for the mistakes people make in sheets.
+        names = {"text": "Question", "subject": "Subject", "topic": "Topic", "explanation": "Explanation"}
+        errors = [
+            f"{names.get(e.split()[0], e.split()[0])} {e.split(' ', 1)[1]}" if " is too long " in e else e
+            for e in errors
+        ]
+        errors = [
+            "Question is missing" if e == "text is required"
+            else "Subject is missing" if e == "subject is required"
+            else "Difficulty must be easy, medium or hard" if e.startswith("difficulty")
+            else f"Option {e[7]} is missing or longer than 500 characters" if e.startswith("option ")
+            else e
+            for e in errors
+            if not e.startswith("correctAnswer")
+        ]
+        if not answer:
+            errors.append("Correct answer is missing")
+        elif letter is None:
+            errors.append("Correct answer must be A, B, C, D or the exact text of one option")
+        if not errors:
+            key = (PracticeAttempt.key_for(fields["subject"]), _text_key(fields["text"]))
+            if key in existing:
+                errors.append("Already in the question bank")
+            elif key in first_line:
+                errors.append(f"Same question as row {first_line[key]}")
+            else:
+                first_line[key] = line
+        rows.append(
+            {
+                "line": line,
+                **{k: item[k] for k in ("text", "subject", "topic", "difficulty", "options", "correctAnswer", "explanation")},
+                "errors": errors,
+                "_fields": fields,
+            }
+        )
+
+    public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in rows]
+    valid = [r for r in rows if not r["errors"]]
+    summary = {"total": len(rows), "valid": len(valid), "invalid": len(rows) - len(valid)}
+    if not commit:
+        return JsonResponse({"rows": public, "summary": summary})
+    if not valid:
+        raise BadRequest("None of the rows can be imported. Fix the problems and try again.")
+
+    for row in valid:
+        fields = row["_fields"]
+        Question.objects.create(
+            institution=institution,
+            created_by=request.user,
+            subject=fields["subject"],
+            subject_key=PracticeAttempt.key_for(fields["subject"]),
+            topic=fields["topic"] or "",
+            difficulty=fields["difficulty"],
+            text=fields["text"],
+            options=fields["options"],
+            correct_answer=fields["correct_answer"],
+            explanation=fields["explanation"] or "",
+            ai_generated=False,
+        )
+    subjects = sorted({r["_fields"]["subject"] for r in valid}, key=str.casefold)
+    AuditLog.record(
+        institution,
+        request.user,
+        "questions.imported",
+        f"Imported {len(valid)} question{'s' if len(valid) != 1 else ''} ({', '.join(subjects)}) from a CSV file",
+        created=len(valid),
+        skipped=len(rows) - len(valid),
+    )
+    return JsonResponse(
+        {"created": len(valid), "skipped": len(rows) - len(valid), "subjects": subjects, "rows": public}, status=201
+    )
+
+
 @require_http_methods(["DELETE"])
 @jwt_required
 @role_required(*STAFF)
@@ -209,8 +357,13 @@ def question_detail(request, question_id):
 def overview(request):
     institution = request.user.institution
     bank = Question.objects.filter(institution=institution)
-    cohorts = sorted(
-        stats.cohort_stats(institution), key=lambda c: (-c["studentCount"], c["name"].casefold())
+    group_stats = stats.group_stats(institution)
+    sections = sorted(
+        (
+            structure.node_summary(node, group_stats, [node.department.batch, node.department, node])
+            for node in MODELS["section"].objects.filter(institution=institution).select_related("department__batch")
+        ),
+        key=lambda c: (-c["studentCount"], c["label"].casefold()),
     )
     # Practice endpoints are student-only, so every attempt is a student's.
     recent_practice = PracticeAttempt.objects.filter(
@@ -223,12 +376,12 @@ def overview(request):
                 "myQuestions": bank.filter(created_by=request.user).count(),
                 "aiGenerated": bank.filter(ai_generated=True).count(),
                 "students": User.objects.filter(institution=institution, role="student").count(),
-                "cohorts": len(cohorts),
+                **structure.counts(institution),
             },
             "practice": {"last7Days": recent_practice.count()},
-            "cohorts": [
-                {k: c[k] for k in ("id", "name", "attempts", "averageScore")} | {"students": c["studentCount"]}
-                for c in cohorts[:8]
+            "sections": [
+                {k: c[k] for k in ("id", "name", "label", "attempts", "averageScore")} | {"students": c["studentCount"]}
+                for c in sections[:8]
             ],
             "subjects": stats.subject_breakdown(stats.student_subject_rows(institution), limit=8),
             "recentQuestions": [
@@ -249,15 +402,7 @@ def students(request):
     institution = request.user.institution
     members = User.objects.filter(institution=institution, role="student")
 
-    cohort_id = request.GET.get("cohort", "").strip()
-    if cohort_id:
-        try:
-            cohort = Cohort.objects.filter(institution=institution, pk=cohort_id).first()
-        except ValidationError:
-            cohort = None
-        if cohort is None:
-            raise BadRequest("Unknown cohort")
-        members = members.filter(cohort=cohort)
+    members = structure.filter_by_groups(members, institution, request.GET)
 
     query = clean_query(request.GET.get("q"))
     if query:
@@ -266,7 +411,7 @@ def students(request):
     total = members.count()
     offset = _int(request.GET.get("offset"), 0, 0, 1_000_000)
     limit = _int(request.GET.get("limit"), 50, 1, MAX_PAGE)
-    page = list(members.select_related("cohort").order_by("name")[offset : offset + limit])
+    page = list(members.select_related(*User.PLACEMENT_FIELDS).order_by("name")[offset : offset + limit])
     practice = stats.student_stats(institution, [s.pk for s in page])
 
     return JsonResponse(
@@ -277,6 +422,7 @@ def students(request):
                     "name": s.name,
                     "email": s.email,
                     "cohort": s.cohort.to_dict() if s.cohort_id else None,
+                    "placement": s.placement(),
                     "lastLogin": s.last_login,
                     "mustChangePassword": s.must_change_password,
                     **practice.get(s.pk, {"attempts": 0, "averageScore": None, "lastPracticeAt": None}),

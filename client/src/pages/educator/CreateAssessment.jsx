@@ -9,13 +9,15 @@ import { Button, Card, CardHeader, Field, Input, PageHeader, SearchInput, Select
 import { inputStyles } from "../../components/styles";
 import { AiBadge, DifficultyBadge } from "../../components/questions";
 import { MonitoringSettings } from "../../components/proctoring";
+import GroupPicker from "../../components/GroupPicker";
 import { DEFAULT_MONITORING, monitoringFormValues } from "../../utils/proctoring";
 import { apiError, cx } from "../../utils/helpers";
 import { DIFFICULTIES } from "../../utils/questions";
 import { formatClockTime, formatDateTime, formatDuration, toLocalInput } from "../../utils/time";
+import { EMPTY_SELECTION, LEVEL_META, deepest, selectedNode, selectionFromPath } from "../../utils/structure";
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
-const FIELDS = ["title", "cohortId", "startsAt", "durationMinutes", "marksPerQuestion", "numQuestions", "questionIds", "instructions"];
+const FIELDS = ["title", "audience", "startsAt", "durationMinutes", "marksPerQuestion", "numQuestions", "questionIds", "instructions"];
 
 const nextQuarterHour = () => {
   const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -30,10 +32,10 @@ const clampInt = (value, low, high) => {
 
 const CreateAssessment = () => {
   const navigate = useNavigate();
-  const cohorts = useApi("/institution/cohorts");
+  const structure = useApi("/institution/structure");
+  const [audience, setAudience] = useState(EMPTY_SELECTION);
   const [form, setForm] = useState({
     title: "",
-    cohortId: "",
     instructions: "",
     startsAt: nextQuarterHour(),
     durationMinutes: 45,
@@ -71,13 +73,13 @@ const CreateAssessment = () => {
         setForm((f) => ({
           ...f,
           title: `${source.title} (copy)`.slice(0, 200),
-          cohortId: source.cohort.id,
           instructions: source.instructions ?? "",
           durationMinutes: source.durationMinutes,
           marksPerQuestion: source.marksPerQuestion,
           numQuestions: ids.length,
           shuffleQuestions: source.shuffleQuestions,
         }));
+        setAudience(selectionFromPath(source.audience.path));
         if (source.monitoring) setMonitoring(monitoringFormValues(source.monitoring));
         setSelected(new Map(kept.map((qid) => [qid, byId.get(qid)])));
         const lost = ids.length - kept.length;
@@ -146,12 +148,13 @@ const CreateAssessment = () => {
   const startsAt = form.startsAt ? new Date(form.startsAt) : null;
   const endsAt = startsAt && form.durationMinutes ? new Date(startsAt.getTime() + form.durationMinutes * 60000) : null;
   const totalMarks = n * (Number(form.marksPerQuestion) || 0);
-  const cohort = cohorts.data?.cohorts?.find((c) => c.id === form.cohortId);
+  const target = deepest(audience);
+  const audienceNode = selectedNode(structure.data?.batches, audience);
 
   // What still stops the test from being scheduled (cheap, so worked out on every render).
   const missing = [];
   if (form.title.trim().length < 3) missing.push("Add a title");
-  if (!form.cohortId) missing.push("Choose a cohort");
+  if (!target) missing.push("Choose who takes the test");
   if (!startsAt || startsAt.getTime() < Date.now() - 5 * 60000) missing.push("Pick a start time in the future");
   if (!(form.durationMinutes >= 5 && form.durationMinutes <= 300)) missing.push("Set a duration of 5-300 minutes");
   if (!(n >= 1 && n <= 100)) missing.push("Set 1-100 questions");
@@ -166,7 +169,7 @@ const CreateAssessment = () => {
     try {
       const { data } = await api.post("/assessments", {
         title: form.title.trim(),
-        cohortId: form.cohortId,
+        audience: target,
         instructions: form.instructions.trim(),
         subject: subject || [...selected.values()][0]?.subject || "",
         startsAt: new Date(form.startsAt).toISOString(),
@@ -181,7 +184,7 @@ const CreateAssessment = () => {
           cameraRequired: monitoring.cameraRequired && capabilities.data?.cameraChecks !== false,
         },
       });
-      toast.success(`Scheduled for ${data.assessment.cohort.name}`);
+      toast.success(`Scheduled for ${data.assessment.audience.label}`);
       navigate(`/assessments/${data.assessment.id}`);
     } catch (error) {
       const all = error.response?.data?.errors ?? [];
@@ -208,7 +211,7 @@ const CreateAssessment = () => {
         description={
           copying
             ? "Copying the test's settings and questions…"
-            : "Choose questions from your question bank, schedule the test and assign it to a cohort."
+            : "Choose questions from your question bank, schedule the test and assign it to a batch, department, section or cohort."
         }
       />
 
@@ -220,14 +223,31 @@ const CreateAssessment = () => {
               <div className="sm:col-span-2">
                 <Input id="test-title" label="Title" placeholder="e.g. Java Fundamentals, Unit 3" maxLength={200} value={form.title} error={errors.title} onChange={set("title")} />
               </div>
-              <Select id="test-cohort" label="Cohort" value={form.cohortId} error={errors.cohortId} onChange={set("cohortId")}>
-                <option value="">Choose a cohort</option>
-                {(cohorts.data?.cohorts ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.studentCount} student{c.studentCount === 1 ? "" : "s"})
-                  </option>
-                ))}
-              </Select>
+              <fieldset className="space-y-2 sm:col-span-2">
+                <legend className="text-sm font-semibold text-slate-700">Assign to</legend>
+                <p className="text-[13px] text-slate-500">
+                  Stop at any level: a whole batch, one department, a section or a single cohort. Everyone below it takes
+                  the test.
+                </p>
+                <GroupPicker
+                  idPrefix="test-audience"
+                  tree={structure.data?.batches}
+                  value={audience}
+                  error={errors.audience}
+                  showCounts
+                  onChange={(next) => {
+                    setAudience(next);
+                    setErrors((errs) => ({ ...errs, audience: undefined }));
+                  }}
+                />
+                {audienceNode && (
+                  <p className="text-[13px] text-slate-600">
+                    {LEVEL_META[audienceNode.level].label}{" "}
+                    <span className="font-medium text-slate-900">{audienceNode.label}</span> · {audienceNode.studentCount}{" "}
+                    student{audienceNode.studentCount === 1 ? "" : "s"}
+                  </p>
+                )}
+              </fieldset>
               <div className="sm:col-span-2">
                 <Textarea
                   id="test-instructions"
@@ -403,9 +423,8 @@ const CreateAssessment = () => {
                 <span>
                   {bank.data.total} question{bank.data.total === 1 ? "" : "s"} available{subject ? ` in ${subject}` : ""}, but the test needs {n}.
                 </span>
-                <Link to="/generator" className="inline-flex items-center gap-1 font-medium text-amber-900 underline underline-offset-2">
-                  <SparklesIcon className="size-4" />
-                  Generate more with AI
+                <Link to="/questions/add" className="inline-flex items-center gap-1 font-medium text-amber-900 underline underline-offset-2">
+                  Add more questions
                 </Link>
               </div>
             )}
@@ -416,8 +435,8 @@ const CreateAssessment = () => {
               ) : questions.length === 0 ? (
                 <li className="px-5 py-8 text-center text-[13px] text-slate-500">
                   No questions match.{" "}
-                  <Link to="/generator" className="font-medium text-accent-700 hover:text-accent-800">
-                    Generate some with AI
+                  <Link to="/questions/add" className="font-medium text-accent-700 hover:text-accent-800">
+                    Add some
                   </Link>
                 </li>
               ) : (
@@ -450,7 +469,7 @@ const CreateAssessment = () => {
           <dl className="space-y-3 px-5 py-4 text-sm">
             {[
               ["Test", form.title.trim() || "Untitled"],
-              ["Cohort", cohort?.name ?? "Not chosen"],
+              ["Assigned to", audienceNode?.label ?? "Not chosen"],
               ["Opens", startsAt ? formatDateTime(startsAt) : "Not set"],
               ["Closes", endsAt ? formatClockTime(endsAt) : "Not set"],
               ["Questions", `${selected.size} / ${n || 0}`],

@@ -17,17 +17,19 @@ import SetPassword from "./pages/SetPassword";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Users from "./pages/admin/Users";
 import ImportUsers from "./pages/admin/ImportUsers";
-import Cohorts from "./pages/admin/Cohorts";
-import CohortDetail from "./pages/admin/CohortDetail";
+import Structure from "./pages/admin/Structure";
+import GroupDetail from "./pages/admin/GroupDetail";
+import Board from "./pages/Board";
 import EducatorDashboard from "./pages/educator/EducatorDashboard";
-import Generator from "./pages/educator/Generator";
+import AddQuestions from "./pages/educator/AddQuestions";
 import QuestionBank from "./pages/educator/QuestionBank";
 import Students from "./pages/educator/Students";
 import Assessments from "./pages/educator/Assessments";
 import CreateAssessment from "./pages/educator/CreateAssessment";
 import AssessmentDetail from "./pages/educator/AssessmentDetail";
 import StudentHome from "./pages/student/StudentHome";
-import Performance from "./pages/student/Performance";
+import StudentReport from "./pages/reports/StudentReport";
+import ReportsOverview from "./pages/reports/ReportsOverview";
 import MyTests from "./pages/student/MyTests";
 import SetupCheck from "./pages/student/SetupCheck";
 import TakeTest from "./pages/student/TakeTest";
@@ -53,6 +55,12 @@ const RoleTheme = () => {
 };
 
 // One URL, three homes: the backend role decides which dashboard you see.
+/** Students get their own report; admins and educators the institution's. */
+const RoleReports = () => {
+  const { user } = useAuth();
+  return user?.role === "student" ? <StudentReport /> : <ReportsOverview />;
+};
+
 const RoleHome = () => {
   const { user } = useAuth();
   if (user?.role === "admin") return <AdminDashboard />;
@@ -97,12 +105,16 @@ const App = () => (
             <Route path="*" element={<Navigate to="profile" replace />} />
           </Route>
 
+          <Route path="/board" element={<Board />} />
+
           <Route path="/users" element={only(ADMIN, <Users />)} />
           <Route path="/users/import" element={only(ADMIN, <ImportUsers />)} />
-          <Route path="/cohorts" element={only(ADMIN, <Cohorts />)} />
-          <Route path="/cohorts/:id" element={only(ADMIN, <CohortDetail />)} />
+          <Route path="/structure" element={only(ADMIN, <Structure />)} />
+          <Route path="/structure/:level/:id" element={only(ADMIN, <GroupDetail />)} />
+          <Route path="/cohorts" element={<Navigate to="/structure" replace />} />
 
-          <Route path="/generator" element={only(STAFF, <Generator />)} />
+          <Route path="/questions/add" element={only(STAFF, <AddQuestions />)} />
+          <Route path="/generator" element={<Navigate to="/questions/add?tab=ai" replace />} />
           <Route path="/questions" element={only(STAFF, <QuestionBank />)} />
           <Route path="/students" element={only(STAFF, <Students />)} />
           <Route path="/assessments" element={only(STAFF, <Assessments />)} />
@@ -114,7 +126,9 @@ const App = () => (
           <Route path="/tests" element={only(STUDENT, <MyTests />)} />
           <Route path="/tests/setup-check" element={only(STUDENT, <SetupCheck />)} />
           <Route path="/tests/:id" element={only(STUDENT, <TakeTest />)} />
-          <Route path="/performance" element={only(STUDENT, <Performance />)} />
+          <Route path="/performance" element={<Navigate to="/reports" replace />} />
+          <Route path="/reports" element={<RoleReports />} />
+          <Route path="/reports/students/:id" element={only(STAFF, <StudentReport />)} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

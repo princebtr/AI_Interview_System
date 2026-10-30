@@ -1,19 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowUpTrayIcon, KeyIcon, UserPlusIcon } from "@heroicons/react/20/solid";
+import {
+  ArrowDownTrayIcon,
+  ArrowsRightLeftIcon,
+  ArrowUpTrayIcon,
+  KeyIcon,
+  UserPlusIcon,
+} from "@heroicons/react/20/solid";
 import { buttonStyles } from "../../components/styles";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
 import AddUserPanel from "../../components/admin/AddUserPanel";
+import MoveStudentPanel from "../../components/admin/MoveStudentPanel";
 import ResetPasswordPanel from "../../components/admin/ResetPasswordPanel";
-import { Badge, Button, Card, PageHeader, SearchInput, Select } from "../../components/ui";
+import GroupPicker from "../../components/GroupPicker";
+import { Badge, Button, Card, PageHeader, SearchInput } from "../../components/ui";
 import { apiError, cx, formatDate, initials } from "../../utils/helpers";
 import { ROLES, roleMeta } from "../../utils/roles";
+import { exportUsers } from "../../utils/users";
+import { EMPTY_SELECTION, selectionParams, validSelection } from "../../utils/structure";
 
 const PAGE_SIZE = 50;
-
-const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 
 const Status = ({ user }) => {
   const [dot, text, label] = !user.lastLogin
@@ -51,15 +59,17 @@ const Users = () => {
   const role = ROLES.some((r) => r.value === roleParam) ? roleParam : "";
   const addParam = params.get("add");
   const adding = Boolean(addParam);
-  const [cohort, setCohort] = useState("");
+  const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [resetting, setResetting] = useState(null);
+  const [moving, setMoving] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState({ users: [], total: 0, counts: {} });
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [cohorts, setCohorts] = useState([]);
-  const [cohortsLoaded, setCohortsLoaded] = useState(false);
+  const [tree, setTree] = useState([]);
+  const [treeLoaded, setTreeLoaded] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   const updateParams = (changes) =>
@@ -84,10 +94,10 @@ const Users = () => {
       limit: PAGE_SIZE,
       offset,
       ...(role && { role }),
-      ...(cohort && { cohort }),
+      ...selectionParams(selection),
       ...(query && { q: query }),
     }),
-    [role, cohort, query]
+    [role, selection, query]
   );
 
   useEffect(() => {
@@ -106,14 +116,32 @@ const Users = () => {
   useEffect(() => {
     let cancelled = false;
     api
-      .get("/institution/cohorts")
-      .then(({ data }) => !cancelled && setCohorts(data.cohorts))
-      .catch((error) => !cancelled && toast.error(apiError(error, "Couldn't load cohorts.")))
-      .finally(() => !cancelled && setCohortsLoaded(true));
+      .get("/institution/structure")
+      .then(({ data }) => {
+        if (cancelled) return;
+        setTree(data.batches);
+        setSelection((prev) => validSelection(data.batches, prev));
+      })
+      .catch((error) => !cancelled && toast.error(apiError(error, "Couldn't load the academic structure.")))
+      .finally(() => !cancelled && setTreeLoaded(true));
     return () => {
       cancelled = true;
     };
   }, [reloadKey]);
+
+  // Download the users the current filters show, in the import's columns.
+  const downloadExport = async () => {
+    setExporting(true);
+    try {
+      const { limit: _limit, offset: _offset, ...filters } = paramsFor(0);
+      await exportUsers(filters);
+      toast.success("Exported. Edit it and import it again with “Update existing users”.");
+    } catch (error) {
+      toast.error(apiError(error, "Couldn't export the users."));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -131,13 +159,13 @@ const Users = () => {
 
   const selectRole = (value) => {
     updateParams({ role: value });
-    // Only students belong to cohorts.
-    if (value !== "" && value !== "student") setCohort("");
+    // Only students belong to batches, departments, sections and cohorts.
+    if (value !== "" && value !== "student") setSelection(EMPTY_SELECTION);
   };
 
   const clearFilters = () => {
     updateParams({ role: null });
-    setCohort("");
+    setSelection(EMPTY_SELECTION);
     setSearch("");
     setQuery("");
   };
@@ -147,8 +175,8 @@ const Users = () => {
     { value: "", label: "All", count: ROLES.reduce((n, r) => n + (counts[r.value] ?? 0), 0) },
     ...ROLES.map((r) => ({ value: r.value, label: r.plural, count: counts[r.value] ?? 0 })),
   ];
-  const showCohortFilter = cohorts.length > 0 && (role === "" || role === "student");
-  const filtered = Boolean(role || cohort || query);
+  const showGroupFilter = tree.length > 0 && (role === "" || role === "student");
+  const filtered = Boolean(role || selection.batch || query);
   const institution = me?.institution?.name;
 
   return (
@@ -161,9 +189,18 @@ const Users = () => {
         }. People sign in with the email and password you set.`}
         actions={
           <>
+            <Button
+              variant="secondary"
+              onClick={downloadExport}
+              loading={exporting}
+              title={filtered ? "Export the users these filters show" : "Export every user"}
+            >
+              {!exporting && <ArrowDownTrayIcon className="size-4" />}
+              {filtered ? "Export filtered" : "Export"}
+            </Button>
             <Link to="/users/import" className={buttonStyles({ variant: "secondary" })}>
               <ArrowUpTrayIcon className="size-4" />
-              Import users
+              Import
             </Link>
             <Button onClick={() => setAdding(true)}>
               <UserPlusIcon className="size-4" />
@@ -204,27 +241,7 @@ const Users = () => {
             })}
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {showCohortFilter && (
-              <div className="sm:w-48">
-                <label htmlFor="cohort-filter" className="sr-only">
-                  Filter by cohort
-                </label>
-                <Select
-                  id="cohort-filter"
-                  value={cohort}
-                  onChange={(e) => setCohort(e.target.value)}
-                  compact
-                >
-                  <option value="">All cohorts</option>
-                  {cohorts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.studentCount})
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
+          <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
             <SearchInput
               id="user-search"
               label="Search users"
@@ -237,16 +254,22 @@ const Users = () => {
           </div>
         </div>
 
+        {showGroupFilter && (
+          <div className="border-b border-slate-100 px-4 py-3">
+            <GroupPicker mode="filter" idPrefix="users" tree={tree} value={selection} onChange={setSelection} showCounts />
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[12px] text-slate-500">
                 <th className="px-5 py-2.5 font-medium">User</th>
                 <th className="px-5 py-2.5 font-medium">Role</th>
-                <th className="hidden px-5 py-2.5 font-medium md:table-cell">Cohort</th>
+                <th className="hidden px-5 py-2.5 font-medium md:table-cell">Batch · Department · Section · Cohort</th>
                 <th className="hidden px-5 py-2.5 font-medium sm:table-cell">Status</th>
                 <th className="hidden px-5 py-2.5 text-right font-medium lg:table-cell">Added</th>
-                <th className="w-12 px-3 py-2.5">
+                <th className="w-20 px-3 py-2.5">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -301,8 +324,8 @@ const Users = () => {
                       <td className="px-5 py-3">
                         <Badge tone={meta.tone}>{meta.label}</Badge>
                       </td>
-                      <td className="hidden px-5 py-3 text-slate-700 md:table-cell">
-                        {u.cohort?.name ?? <span className="text-slate-300">—</span>}
+                      <td className="hidden px-5 py-3 text-[13px] text-slate-700 md:table-cell">
+                        {u.placement?.label ?? <span className="text-slate-300">—</span>}
                       </td>
                       <td className="hidden px-5 py-3 sm:table-cell">
                         <Status user={u} />
@@ -310,7 +333,18 @@ const Users = () => {
                       <td className="hidden px-5 py-3 text-right text-slate-500 tabular-nums lg:table-cell">
                         {formatDate(u.createdAt)}
                       </td>
-                      <td className="px-3 py-3 text-right">
+                      <td className="px-3 py-3 text-right whitespace-nowrap">
+                        {u.role === "student" && tree.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setMoving(u)}
+                            aria-label={`Change placement for ${u.name}`}
+                            title="Change placement"
+                            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                          >
+                            <ArrowsRightLeftIcon className="size-4" />
+                          </button>
+                        )}
                         {u.id !== me?.id && (
                           <button
                             type="button"
@@ -345,17 +379,23 @@ const Users = () => {
         )}
       </Card>
 
-      {/* Wait for cohorts so the form knows whether to offer "choose" or "create". */}
-      {adding && cohortsLoaded && (
+      {/* Wait for the structure so the form can offer every batch, department, section and cohort. */}
+      {adding && treeLoaded && (
         <AddUserPanel
-          cohorts={cohorts}
+          tree={tree}
           initialRole={addParam}
           initialCohortId={params.get("cohort") ?? ""}
           onClose={() => setAdding(false)}
-          onCohortCreated={(c) =>
-            setCohorts((prev) => [...prev, { studentCount: 0, ...c }].sort(byName))
-          }
           onCreated={() => setReloadKey((k) => k + 1)}
+        />
+      )}
+
+      {moving && (
+        <MoveStudentPanel
+          user={moving}
+          tree={tree}
+          onClose={() => setMoving(null)}
+          onMoved={() => setReloadKey((k) => k + 1)}
         />
       )}
 
