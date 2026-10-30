@@ -1,0 +1,59 @@
+# --- Secrets & local config --------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+*.local
+
+# --- Python (server/) --------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Proctoring model weights: download with `python manage.py fetch_proctoring_models`
+*.pt
+*.onnx
+*.tflite
+
+# User uploads (interview screenshots, etc.)
+server/media/
+
+# --- Node (client/) ----------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.vite/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Logs & temp -------------------------------------------------------------
+logs/
+*.log
+*.tmp
+*.pid
+
+# --- Editors & OS ------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.sw?
+*.suo
+.DS_Store
+Thumbs.db
+
+# --- Claude Code local settings ----------------------------------------------
+.claude/settings.local.json

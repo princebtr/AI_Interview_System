@@ -1,1 +1,240 @@
 @import "tailwindcss";
+
+/*
+ * Cohortix design tokens ("Corporate Trust").
+ * Components never name a hue directly: they use
+ *   primary / secondary        the brand colours as solid fills: primary buttons and the
+ *                              active nav item; secondary for supporting badges and accents.
+ *                              Never blended into gradients.
+ *   on-primary / on-secondary  text and icons on those fills (white, or near-black on light colours)
+ *   primary-hover / secondary-hover  the same colour, slightly darker
+ *   accent-*   tints and shades of the primary (soft fills, rings, focus); 600+ reads as text on white
+ *   accent2-*  the same for the secondary
+ *   background / surface / foreground / muted / border  the neutral frame shared by every page
+ * <html data-role> swaps the palette: the platform default is indigo + violet,
+ * admins blue + indigo, educators emerald + teal, students violet + fuchsia.
+ * An institution's own colours (Django admin) override all of these at runtime:
+ * see utils/theme.js and server/institutions/theme.py.
+ */
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* One step rounder than Tailwind's defaults: rounded-md (8px) for controls,
+     rounded-lg (12px) for cards, rounded-xl (16px) for large surfaces. */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --color-accent-50: var(--color-indigo-50);
+  --color-accent-100: var(--color-indigo-100);
+  --color-accent-200: var(--color-indigo-200);
+  --color-accent-300: var(--color-indigo-300);
+  --color-accent-400: var(--color-indigo-400);
+  --color-accent-500: var(--color-indigo-500);
+  --color-accent-600: var(--color-indigo-600);
+  --color-accent-700: var(--color-indigo-700);
+  --color-accent-800: var(--color-indigo-800);
+  --color-accent-900: var(--color-indigo-900);
+
+  --color-accent2-50: var(--color-violet-50);
+  --color-accent2-100: var(--color-violet-100);
+  --color-accent2-200: var(--color-violet-200);
+  --color-accent2-300: var(--color-violet-300);
+  --color-accent2-400: var(--color-violet-400);
+  --color-accent2-500: var(--color-violet-500);
+  --color-accent2-600: var(--color-violet-600);
+  --color-accent2-700: var(--color-violet-700);
+
+  --color-primary: var(--color-indigo-600);
+  --color-on-primary: var(--color-white);
+  --color-primary-hover: color-mix(in oklab, var(--color-primary) 86%, black);
+  --color-secondary: var(--color-violet-600);
+  --color-on-secondary: var(--color-white);
+  --color-secondary-hover: color-mix(in oklab, var(--color-secondary) 86%, black);
+
+  --color-background: var(--color-slate-50);
+  --color-surface: var(--color-white);
+  --color-foreground: var(--color-slate-900);
+  --color-muted: var(--color-slate-500);
+  --color-border: var(--color-slate-200);
+
+  /* Shadows are tinted with the role accent instead of neutral grey (via --shadow-tint,
+     a plain runtime variable, so the build can't freeze it to the default indigo). */
+  --shadow-soft: 0 4px 20px -2px color-mix(in oklab, var(--shadow-tint) 10%, transparent);
+  --shadow-lift:
+    0 10px 25px -5px color-mix(in oklab, var(--shadow-tint) 15%, transparent),
+    0 8px 10px -6px color-mix(in oklab, var(--shadow-tint) 10%, transparent);
+  --shadow-button: 0 4px 14px 0 color-mix(in oklab, var(--shadow-tint) 30%, transparent);
+  --shadow-button-hover: 0 8px 20px -2px color-mix(in oklab, var(--shadow-tint) 38%, transparent);
+  --shadow-glow: 0 0 20px color-mix(in oklab, var(--shadow-tint) 50%, transparent);
+
+  --animate-drift: drift 9s ease-in-out infinite;
+}
+
+:root {
+  --shadow-tint: var(--color-primary);
+}
+
+:root[data-role="admin"] {
+  --color-accent-50: var(--color-blue-50);
+  --color-accent-100: var(--color-blue-100);
+  --color-accent-200: var(--color-blue-200);
+  --color-accent-300: var(--color-blue-300);
+  --color-accent-400: var(--color-blue-400);
+  --color-accent-500: var(--color-blue-500);
+  --color-accent-600: var(--color-blue-600);
+  --color-accent-700: var(--color-blue-700);
+  --color-accent-800: var(--color-blue-800);
+  --color-accent-900: var(--color-blue-900);
+
+  --color-accent2-50: var(--color-indigo-50);
+  --color-accent2-100: var(--color-indigo-100);
+  --color-accent2-200: var(--color-indigo-200);
+  --color-accent2-300: var(--color-indigo-300);
+  --color-accent2-400: var(--color-indigo-400);
+  --color-accent2-500: var(--color-indigo-500);
+  --color-accent2-600: var(--color-indigo-600);
+  --color-accent2-700: var(--color-indigo-700);
+
+  --color-primary: var(--color-blue-600);
+  --color-secondary: var(--color-indigo-600);
+}
+
+:root[data-role="educator"] {
+  --color-accent-50: var(--color-emerald-50);
+  --color-accent-100: var(--color-emerald-100);
+  --color-accent-200: var(--color-emerald-200);
+  --color-accent-300: var(--color-emerald-300);
+  --color-accent-400: var(--color-emerald-400);
+  --color-accent-500: var(--color-emerald-500);
+  --color-accent-600: var(--color-emerald-600);
+  --color-accent-700: var(--color-emerald-700);
+  --color-accent-800: var(--color-emerald-800);
+  --color-accent-900: var(--color-emerald-900);
+
+  --color-accent2-50: var(--color-teal-50);
+  --color-accent2-100: var(--color-teal-100);
+  --color-accent2-200: var(--color-teal-200);
+  --color-accent2-300: var(--color-teal-300);
+  --color-accent2-400: var(--color-teal-400);
+  --color-accent2-500: var(--color-teal-500);
+  --color-accent2-600: var(--color-teal-600);
+  --color-accent2-700: var(--color-teal-700);
+
+  /* 700s: the 600s are too light for white text. */
+  --color-primary: var(--color-emerald-700);
+  --color-secondary: var(--color-teal-700);
+}
+
+:root[data-role="student"] {
+  --color-accent-50: var(--color-violet-50);
+  --color-accent-100: var(--color-violet-100);
+  --color-accent-200: var(--color-violet-200);
+  --color-accent-300: var(--color-violet-300);
+  --color-accent-400: var(--color-violet-400);
+  --color-accent-500: var(--color-violet-500);
+  --color-accent-600: var(--color-violet-600);
+  --color-accent-700: var(--color-violet-700);
+  --color-accent-800: var(--color-violet-800);
+  --color-accent-900: var(--color-violet-900);
+
+  --color-accent2-50: var(--color-fuchsia-50);
+  --color-accent2-100: var(--color-fuchsia-100);
+  --color-accent2-200: var(--color-fuchsia-200);
+  --color-accent2-300: var(--color-fuchsia-300);
+  --color-accent2-400: var(--color-fuchsia-400);
+  --color-accent2-500: var(--color-fuchsia-500);
+  --color-accent2-600: var(--color-fuchsia-600);
+  --color-accent2-700: var(--color-fuchsia-700);
+
+  --color-primary: var(--color-violet-600);
+  --color-secondary: var(--color-fuchsia-700);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground;
+  }
+
+  :where(input[type="radio"], input[type="checkbox"]) {
+    accent-color: var(--color-accent-600);
+  }
+
+  :where(input[type="radio"], input[type="checkbox"]):focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent-600) 18%, transparent);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* Slow breathing for decorative glows and floating cards. */
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) scale(1.04);
+  }
+}
+
+.slide-in-right {
+  animation: slide-in-right 0.2s ease-out backwards;
+}
+
+.fade-in {
+  animation: fade-in 0.2s ease-out backwards;
+}
+
+.slide-in {
+  animation: slide-in 0.2s ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .slide-in,
+  .slide-in-right,
+  .animate-drift {
+    animation: none;
+  }
+}

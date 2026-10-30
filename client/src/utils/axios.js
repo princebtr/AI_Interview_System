@@ -3,7 +3,7 @@ import { API_CONFIG } from "../config/api";
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: API_CONFIG.EXPRESS_BASE_URL,
+  baseURL: API_CONFIG.BASE_URL,
   timeout: API_CONFIG.TIMEOUT,
   headers: {
     "Content-Type": "application/json",
@@ -33,7 +33,10 @@ api.interceptors.response.use(
   },
   (error) => {
     // Handle common errors
-    if (error.response?.status === 401) {
+    // Auth endpoints report bad credentials as 401 themselves; only an
+    // expired/invalid session elsewhere should force a fresh login.
+    const isAuthCall = error.config?.url?.startsWith("/auth/");
+    if (error.response?.status === 401 && !isAuthCall) {
       // Unauthorized - clear token and redirect to login
       localStorage.removeItem("token");
       window.location.href = "/login";

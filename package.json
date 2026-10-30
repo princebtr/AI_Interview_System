@@ -1,25 +1,13 @@
 {
-  "name": "interview-system",
+  "name": "cohortix",
   "version": "1.0.0",
-  "description": "Interview System with Express and Flask backends",
+  "description": "Cohortix: assessments, AI interviews and student analytics for schools and colleges",
   "scripts": {
-    "start:express": "cd express && npm run dev",
-    "start:flask": "cd server && python app.py",
+    "start:server": "./start-backends.sh",
     "start:client": "cd client && npm run dev",
-    "start:all": "concurrently \"npm run start:express\" \"npm run start:flask\"",
-    "install:all": "cd express && npm install && cd ../client && npm install",
-    "setup": "npm run install:all && cd ../server && pip install -r requirements.txt"
+    "setup": "cd client && npm install && cd ../server && python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  },
-  "keywords": [
-    "interview",
-    "ai",
-    "express",
-    "flask",
-    "react"
-  ],
+  "keywords": ["interview", "ai", "django", "react"],
   "author": "",
   "license": "ISC"
 }
